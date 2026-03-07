@@ -18,32 +18,40 @@ function check_root() {
 }
 
 function check_dependencies() {
-    echo -e "${YELLOW}Checking system dependencies...${NC}"
+    echo -e "${YELLOW}[1/3] Checking system dependencies...${NC}"
     
     # Check curl
     if ! command -v curl &> /dev/null; then
         echo -e "${YELLOW}curl is missing. Installing curl...${NC}"
-        apt-get update && apt-get install -y curl
+        apt-get update -qq && apt-get install -y curl > /dev/null
+        echo -e "${GREEN}✓ curl installed.${NC}"
+    else
+        echo -e "${GREEN}✓ curl is already installed.${NC}"
     fi
 
     # Check Docker
+    echo -e "${YELLOW}[2/3] Checking Docker...${NC}"
     if ! command -v docker &> /dev/null; then
-        echo -e "${YELLOW}Docker is not installed. Installing Docker...${NC}"
+        echo -e "${YELLOW}Docker is not installed. Installing Docker (this may take a while)...${NC}"
         curl -fsSL https://get.docker.com -o get-docker.sh
-        sh get-docker.sh
+        sh get-docker.sh > /dev/null 2>&1
         rm get-docker.sh
-        systemctl enable --now docker
+        systemctl enable --now docker > /dev/null 2>&1
+        echo -e "${GREEN}✓ Docker installed and started.${NC}"
     else
-        echo -e "${GREEN}Docker is already installed.${NC}"
+        echo -e "${GREEN}✓ Docker is already installed.${NC}"
     fi
 
     # Check Docker Compose (plugin or standalone)
+    echo -e "${YELLOW}[3/3] Checking Docker Compose...${NC}"
     if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
         echo -e "${YELLOW}Docker Compose is missing. Installing Docker Compose plugin...${NC}"
-        apt-get update && apt-get install -y docker-compose-plugin
+        apt-get update -qq && apt-get install -y docker-compose-plugin > /dev/null
+        echo -e "${GREEN}✓ Docker Compose installed.${NC}"
     else
-        echo -e "${GREEN}Docker Compose is already installed.${NC}"
+        echo -e "${GREEN}✓ Docker Compose is already installed.${NC}"
     fi
+    echo -e "${GREEN}All system dependencies are ready.${NC}"
 }
 
 function get_docker_compose_cmd() {
@@ -63,12 +71,23 @@ function install_npm_wg() {
         return
     fi
 
-    read -p "Enter your server's public IP or Domain for WireGuard (WG_HOST): " WG_HOST
+    echo -e "${YELLOW}Detecting public IP...${NC}"
+    DETECTED_IP=$(curl -s -m 5 https://ifconfig.me || curl -s -m 5 https://icanhazip.com || echo "")
+    
+    if [ -n "$DETECTED_IP" ]; then
+        echo -e "${GREEN}Detected Public IP: $DETECTED_IP${NC}"
+        read -p "Enter your server's public IP or Domain [Default: $DETECTED_IP]: " WG_HOST
+        WG_HOST=${WG_HOST:-$DETECTED_IP}
+    else
+        read -p "Enter your server's public IP or Domain for WireGuard (WG_HOST): " WG_HOST
+    fi
+
     if [ -z "$WG_HOST" ]; then
         echo -e "${RED}WG_HOST cannot be empty. Aborting.${NC}"
         return
     fi
 
+    echo -e "${YELLOW}Creating installation directory at $INSTALL_DIR...${NC}"
     mkdir -p "$INSTALL_DIR"
     
     # Create docker-compose.yml
@@ -99,15 +118,31 @@ services:
       WG_HOST: "$WG_HOST"
 EOF
 
-    echo -e "${GREEN}Docker compose file created at $DOCKER_COMPOSE_YML${NC}"
+    echo -e "${GREEN}✓ Docker compose file created successfully.${NC}"
     cd "$INSTALL_DIR" || exit
     
+    echo -e "${YELLOW}Starting D3V-NPMWG containers (Pulling images)...${NC}"
     local dc_cmd=$(get_docker_compose_cmd)
     $dc_cmd up -d
     
-    echo -e "${GREEN}D3V-NPMWG installed and started successfully!${NC}"
-    echo -e "${YELLOW}Web UI: http://<your-ip>:81${NC}"
-    echo -e "Wait a minute for the first boot, then follow the setup wizard on the Web UI to create your admin account."
+    echo -e "${YELLOW}Verifying installation...${NC}"
+    sleep 5
+    if docker ps --format '{{.Names}}' | grep -q "npm-wg"; then
+        echo -e "${GREEN}✓ D3V-NPMWG container is running.${NC}"
+        echo -e "\n${GREEN}==================================================================${NC}"
+        echo -e "${GREEN}   D3V-NPMWG INSTALLED SUCCESSFULLY!${NC}"
+        echo -e "${GREEN}==================================================================${NC}"
+        echo -e "${YELLOW}Web UI Admin  : http://$WG_HOST:81${NC}"
+        echo -e "${YELLOW}HTTP Proxy    : Port 80${NC}"
+        echo -e "${YELLOW}HTTPS Proxy   : Port 443${NC}"
+        echo -e "${YELLOW}WireGuard UDP : Port 51820${NC}"
+        echo -e "\nWait about 30-60 seconds for the first initiation, then"
+        echo -e "access the Web UI and create your administrator account."
+        echo -e "${GREEN}==================================================================${NC}"
+    else
+        echo -e "${RED}✗ Error: D3V-NPMWG container failed to start.${NC}"
+        echo -e "Check logs using: docker logs npm-wg"
+    fi
 }
 
 function uninstall_npm_wg() {
