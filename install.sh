@@ -156,6 +156,16 @@ function update_npm_wg() {
     docker image prune -f
 }
 
+function show_usage() {
+    echo -e "Usage: $0 {install|uninstall|reset|update|menu}"
+    echo -e "Commands:"
+    echo -e "  install   : Install D3V-NPMWG"
+    echo -e "  uninstall : Uninstall D3V-NPMWG and remove data"
+    echo -e "  reset     : Reset web admin password"
+    echo -e "  update    : Update D3V-NPMWG to the latest version"
+    echo -e "  menu      : Show the interactive menu (default if no args provided)"
+}
+
 function menu() {
     while true; do
         echo -e "\n${GREEN}=== D3V-NPMWG Installation Manager ===${NC}"
@@ -177,7 +187,7 @@ function menu() {
     done
 }
 
-# Run menu if no arguments, else run the command
+# Entry point
 if [ "$#" -eq 0 ]; then
     menu
 else
@@ -186,6 +196,12 @@ else
         uninstall) uninstall_npm_wg ;;
         reset) reset_password ;;
         update) update_npm_wg ;;
-        *) echo -e "Usage: $0 {install|uninstall|reset|update}" ;;
+        menu) menu ;;
+        -h|--help|help) show_usage ;;
+        *) 
+            echo -e "${RED}Invalid command: $1${NC}"
+            show_usage
+            exit 1
+            ;;
     esac
 fi
