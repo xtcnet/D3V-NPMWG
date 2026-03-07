@@ -1,0 +1,8 @@
+# Auto detect text files and ensure LF for Linux scripts
+* text=auto eol=lf
+
+# Force LF for all files used inside Docker/Linux containers
+docker/rootfs/**/* text eol=lf
+docker/scripts/**/* text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf

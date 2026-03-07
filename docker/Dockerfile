@@ -47,6 +47,15 @@ RUN yarn install \
 COPY docker/rootfs /
 COPY --from=testca /home/step/certs/root_ca.crt /etc/ssl/certs/NginxProxyManager.crt
 
+# Fix CRLF line endings from Windows and set execute permissions on all s6 scripts
+RUN find /etc/s6-overlay -type f -exec sed -i 's/\r$//' {} + \
+	&& find /etc/s6-overlay/s6-rc.d -name 'run' -exec chmod +x {} + \
+	&& find /etc/s6-overlay/s6-rc.d -name 'up' -exec chmod +x {} + \
+	&& find /etc/s6-overlay/s6-rc.d -name '*.sh' -exec chmod +x {} + \
+	&& chmod +x /usr/bin/check-health 2>/dev/null || true \
+	&& sed -i 's/\r$//' /usr/bin/check-health /usr/bin/common.sh 2>/dev/null || true \
+	&& chmod +x /usr/bin/common.sh 2>/dev/null || true
+
 # Remove frontend service not required for prod, dev nginx config as well
 RUN rm -rf /etc/s6-overlay/s6-rc.d/user/contents.d/frontend /etc/nginx/conf.d/dev.conf \
 	&& chmod 644 /etc/logrotate.d/nginx-proxy-manager
