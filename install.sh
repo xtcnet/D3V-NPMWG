@@ -61,7 +61,7 @@ function install_npm_wg() {
 version: "3.8"
 services:
   npm-wg:
-    image: xtcnet/npm-wg:latest # NOTE: Update with actual Docker Hub image if pushed, or leave as npm-wg:latest if built locally. Assuming docker hub image is available or they build it.
+    image: ghcr.io/xtcnet/d3v-npmwg:latest
     # Wait, the README uses npm-wg:latest.
     container_name: npm-wg
     restart: unless-stopped
@@ -83,8 +83,6 @@ services:
     environment:
       WG_HOST: "$WG_HOST"
 EOF
-    # Fix the image name
-    sed -i 's/xtcnet\/npm-wg:latest/npm-wg:latest/g' "$DOCKER_COMPOSE_YML"
 
     echo -e "${GREEN}Docker compose file created at $DOCKER_COMPOSE_YML${NC}"
     cd "$INSTALL_DIR" || exit
