@@ -38,10 +38,9 @@ require_root() {
 get_compose_cmd() {
     if docker compose version > /dev/null 2>&1; then
         echo "docker compose"
-    elif command -v docker-compose > /dev/null 2>&1; then
-        echo "docker-compose"
     else
-        echo ""
+        log_err "Docker Compose plugin not found. Please install it first."
+        exit 1
     fi
 }
 
@@ -81,15 +80,39 @@ install_deps() {
         log_step "Installing Docker... (this may take 1-2 minutes)"
         curl -fsSL https://get.docker.com | sh
         systemctl enable --now docker
-        log_ok "Docker installed and started."
+        log_ok "Docker installed."
     fi
 
-    # --- Docker Compose ---
-    log_step "Checking Docker Compose..."
+    # --- Wait for Docker daemon ---
+    log_step "Waiting for Docker daemon to be ready..."
+    local retries=0
+    while ! docker info > /dev/null 2>&1; do
+        retries=$((retries + 1))
+        if [ "$retries" -ge 30 ]; then
+            log_err "Docker daemon did not start after 30 seconds."
+            log_err "Try: systemctl restart docker"
+            exit 1
+        fi
+        sleep 1
+    done
+    log_ok "Docker daemon is running."
+
+    # --- Remove old standalone docker-compose (Python) if present ---
+    if command -v docker-compose > /dev/null 2>&1; then
+        local dc_path
+        dc_path=$(command -v docker-compose)
+        # Check if it's the old Python version
+        if docker-compose version 2>&1 | grep -qi "docker-compose version 1"; then
+            log_warn "Detected legacy docker-compose (Python). Removing it..."
+            apt-get purge -y docker-compose 2>/dev/null || rm -f "$dc_path" 2>/dev/null || true
+            log_ok "Legacy docker-compose removed."
+        fi
+    fi
+
+    # --- Docker Compose plugin ---
+    log_step "Checking Docker Compose plugin..."
     if docker compose version > /dev/null 2>&1; then
-        log_ok "Docker Compose plugin is already installed."
-    elif command -v docker-compose > /dev/null 2>&1; then
-        log_ok "docker-compose (standalone) is already installed."
+        log_ok "Docker Compose plugin is ready ($(docker compose version))."
     else
         log_step "Installing Docker Compose plugin..."
         apt-get update -qq
