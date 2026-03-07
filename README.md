@@ -130,9 +130,15 @@ volumes:
 4. **Create VPN clients** by clicking "New Client"
 5. **Scan QR code** or **download .conf** file to configure WireGuard on your devices
 
-## 🏗️ Building from Source
+## 🏗️ Building and CI/CD
 
-To build D3V-NPMWG from source, you must build the React frontend before building the Docker image:
+### ☁️ Automated Build (Docker Cloud Build)
+This project is configured with **GitHub Actions** (`.github/workflows/docker-publish.yml`) to automatically build and push multi-arch Docker images (`amd64`, `arm64`) to **GitHub Container Registry (GHCR)** whenever a push is made to the `master` branch or a version tag is created.
+
+Images are available at: `ghcr.io/xtcnet/d3v-npmwg:latest`
+
+### 🏗️ Building from Source Local
+To build D3V-NPMWG from source manually, you must build the React frontend before building the Docker image:
 
 ```bash
 # Clone the repository

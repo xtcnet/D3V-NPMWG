@@ -67,7 +67,7 @@ ENTRYPOINT [ "/init" ]
 
 LABEL org.label-schema.schema-version="1.0" \
 	org.label-schema.license="MIT" \
-	org.label-schema.name="npm-wg" \
-	org.label-schema.description="Nginx Proxy Manager + WireGuard VPN Manager" \
-	org.label-schema.url="https://github.com/npm-wg/npm-wg" \
-	org.label-schema.cmd="docker run --rm -ti --cap-add=NET_ADMIN --cap-add=SYS_MODULE npm-wg:latest"
+	org.label-schema.name="d3v-npmwg" \
+	org.label-schema.description="D3V-NPMWG: Nginx Proxy Manager + WireGuard VPN Manager" \
+	org.label-schema.url="https://github.com/xtcnet/D3V-NPMWG" \
+	org.label-schema.cmd="docker run --rm -ti --cap-add=NET_ADMIN --cap-add=SYS_MODULE d3v-npmwg:latest"
