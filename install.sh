@@ -1,103 +1,160 @@
 #!/bin/bash
+set -e
 
-# Configuration
+# ============================================================
+#  D3V-NPMWG Installer for Ubuntu/Debian
+#  Nginx Proxy Manager + WireGuard VPN
+#  https://github.com/xtcnet/D3V-NPMWG
+# ============================================================
+
 INSTALL_DIR="/opt/d3v-npmwg"
-DOCKER_COMPOSE_YML="$INSTALL_DIR/docker-compose.yml"
+COMPOSE_FILE="${INSTALL_DIR}/docker-compose.yml"
+CONTAINER_NAME="d3v-npmwg"
+IMAGE_NAME="ghcr.io/xtcnet/d3v-npmwg:latest"
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
 
-function check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        echo -e "${RED}Please run as root (use sudo).${NC}"
+# -----------------------------------------------------------
+#  Helpers
+# -----------------------------------------------------------
+log_step()  { echo -e "${CYAN}[*]${NC} $1"; }
+log_ok()    { echo -e "${GREEN}[✓]${NC} $1"; }
+log_warn()  { echo -e "${YELLOW}[!]${NC} $1"; }
+log_err()   { echo -e "${RED}[✗]${NC} $1"; }
+separator() { echo -e "${GREEN}=================================================================${NC}"; }
+
+require_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        log_err "This script must be run as root. Use: sudo $0"
         exit 1
     fi
 }
 
-function check_dependencies() {
-    echo -e "${YELLOW}[1/3] Checking system dependencies...${NC}"
-    
-    # Check curl
-    if ! command -v curl &> /dev/null; then
-        echo -e "${YELLOW}curl is missing. Installing curl...${NC}"
-        apt-get update -qq && apt-get install -y curl > /dev/null
-        echo -e "${GREEN}✓ curl installed.${NC}"
-    else
-        echo -e "${GREEN}✓ curl is already installed.${NC}"
-    fi
-
-    # Check Docker
-    echo -e "${YELLOW}[2/3] Checking Docker...${NC}"
-    if ! command -v docker &> /dev/null; then
-        echo -e "${YELLOW}Docker is not installed. Installing Docker (this may take a while)...${NC}"
-        curl -fsSL https://get.docker.com -o get-docker.sh
-        sh get-docker.sh > /dev/null 2>&1
-        rm get-docker.sh
-        systemctl enable --now docker > /dev/null 2>&1
-        echo -e "${GREEN}✓ Docker installed and started.${NC}"
-    else
-        echo -e "${GREEN}✓ Docker is already installed.${NC}"
-    fi
-
-    # Check Docker Compose (plugin or standalone)
-    echo -e "${YELLOW}[3/3] Checking Docker Compose...${NC}"
-    if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
-        echo -e "${YELLOW}Docker Compose is missing. Installing Docker Compose plugin...${NC}"
-        apt-get update -qq && apt-get install -y docker-compose-plugin > /dev/null
-        echo -e "${GREEN}✓ Docker Compose installed.${NC}"
-    else
-        echo -e "${GREEN}✓ Docker Compose is already installed.${NC}"
-    fi
-    echo -e "${GREEN}All system dependencies are ready.${NC}"
-}
-
-function get_docker_compose_cmd() {
-    if docker compose version &> /dev/null; then
+get_compose_cmd() {
+    if docker compose version > /dev/null 2>&1; then
         echo "docker compose"
-    else
+    elif command -v docker-compose > /dev/null 2>&1; then
         echo "docker-compose"
+    else
+        echo ""
     fi
 }
 
-function install_npm_wg() {
-    check_root
-    check_dependencies
+detect_public_ip() {
+    local ip=""
+    ip=$(curl -s -m 5 https://ifconfig.me 2>/dev/null) \
+        || ip=$(curl -s -m 5 https://icanhazip.com 2>/dev/null) \
+        || ip=$(curl -s -m 5 https://api.ipify.org 2>/dev/null) \
+        || ip=""
+    echo "$ip"
+}
+
+# -----------------------------------------------------------
+#  1. Install system dependencies
+# -----------------------------------------------------------
+install_deps() {
+    separator
+    echo -e "${BOLD} Installing System Dependencies${NC}"
+    separator
+
+    # --- curl ---
+    log_step "Checking curl..."
+    if command -v curl > /dev/null 2>&1; then
+        log_ok "curl is already installed."
+    else
+        log_step "Installing curl..."
+        apt-get update -qq
+        apt-get install -y curl
+        log_ok "curl installed."
+    fi
+
+    # --- Docker ---
+    log_step "Checking Docker..."
+    if command -v docker > /dev/null 2>&1; then
+        log_ok "Docker is already installed ($(docker --version))."
+    else
+        log_step "Installing Docker... (this may take 1-2 minutes)"
+        curl -fsSL https://get.docker.com | sh
+        systemctl enable --now docker
+        log_ok "Docker installed and started."
+    fi
+
+    # --- Docker Compose ---
+    log_step "Checking Docker Compose..."
+    if docker compose version > /dev/null 2>&1; then
+        log_ok "Docker Compose plugin is already installed."
+    elif command -v docker-compose > /dev/null 2>&1; then
+        log_ok "docker-compose (standalone) is already installed."
+    else
+        log_step "Installing Docker Compose plugin..."
+        apt-get update -qq
+        apt-get install -y docker-compose-plugin
+        log_ok "Docker Compose plugin installed."
+    fi
+
+    echo ""
+    log_ok "All system dependencies are ready."
+}
+
+# -----------------------------------------------------------
+#  2. Install D3V-NPMWG
+# -----------------------------------------------------------
+do_install() {
+    require_root
 
     if [ -d "$INSTALL_DIR" ]; then
-        echo -e "${YELLOW}Installation directory ($INSTALL_DIR) already exists. Do you want to update instead?${NC}"
+        log_warn "D3V-NPMWG is already installed at ${INSTALL_DIR}."
+        log_warn "Use the Update option to pull the latest image, or Uninstall first."
         return
     fi
 
-    echo -e "${YELLOW}Detecting public IP...${NC}"
-    DETECTED_IP=$(curl -s -m 5 https://ifconfig.me || curl -s -m 5 https://icanhazip.com || echo "")
-    
-    if [ -n "$DETECTED_IP" ]; then
-        echo -e "${GREEN}Detected Public IP: $DETECTED_IP${NC}"
-        read -p "Enter your server's public IP or Domain [Default: $DETECTED_IP]: " WG_HOST
-        WG_HOST=${WG_HOST:-$DETECTED_IP}
+    separator
+    echo -e "${BOLD} D3V-NPMWG Installation${NC}"
+    separator
+    echo ""
+
+    # --- Dependencies ---
+    install_deps
+    echo ""
+
+    # --- Detect IP ---
+    log_step "Detecting server public IP..."
+    local detected_ip
+    detected_ip=$(detect_public_ip)
+
+    local wg_host=""
+    if [ -n "$detected_ip" ]; then
+        log_ok "Detected IP: ${BOLD}${detected_ip}${NC}"
+        read -rp "$(echo -e "${CYAN}[?]${NC} WG_HOST [${detected_ip}]: ")" wg_host
+        wg_host="${wg_host:-$detected_ip}"
     else
-        read -p "Enter your server's public IP or Domain for WireGuard (WG_HOST): " WG_HOST
+        log_warn "Could not auto-detect public IP."
+        read -rp "$(echo -e "${CYAN}[?]${NC} Enter server public IP or domain: ")" wg_host
     fi
 
-    if [ -z "$WG_HOST" ]; then
-        echo -e "${RED}WG_HOST cannot be empty. Aborting.${NC}"
+    if [ -z "$wg_host" ]; then
+        log_err "WG_HOST cannot be empty. Aborting."
         return
     fi
 
-    echo -e "${YELLOW}Creating installation directory at $INSTALL_DIR...${NC}"
+    # --- Create directory ---
+    log_step "Creating ${INSTALL_DIR}..."
     mkdir -p "$INSTALL_DIR"
-    
-    # Create docker-compose.yml
-    cat <<EOF > "$DOCKER_COMPOSE_YML"
+    log_ok "Directory created."
+
+    # --- Write docker-compose.yml ---
+    log_step "Generating docker-compose.yml..."
+    cat > "$COMPOSE_FILE" <<YAML
 version: "3.8"
 services:
-  npm-wg:
-    image: ghcr.io/xtcnet/d3v-npmwg:latest
-    # Wait, the README uses npm-wg:latest.
-    container_name: npm-wg
+  d3v-npmwg:
+    image: ${IMAGE_NAME}
+    container_name: ${CONTAINER_NAME}
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
@@ -106,166 +163,232 @@ services:
       - net.ipv4.ip_forward=1
       - net.ipv4.conf.all.src_valid_mark=1
     ports:
-      - "80:80"       # HTTP
-      - "81:81"       # Admin UI
-      - "443:443"     # HTTPS
-      - "51820:51820/udp"  # WireGuard
+      - "80:80"
+      - "81:81"
+      - "443:443"
+      - "51820:51820/udp"
     volumes:
       - ./data:/data
       - ./letsencrypt:/etc/letsencrypt
       - ./wireguard:/etc/wireguard
     environment:
-      WG_HOST: "$WG_HOST"
-EOF
+      WG_HOST: "${wg_host}"
+YAML
+    log_ok "docker-compose.yml created."
 
-    echo -e "${GREEN}✓ Docker compose file created successfully.${NC}"
-    cd "$INSTALL_DIR" || exit
-    
-    echo -e "${YELLOW}Starting D3V-NPMWG containers (Pulling images)...${NC}"
-    local dc_cmd=$(get_docker_compose_cmd)
-    $dc_cmd up -d
-    
-    echo -e "${YELLOW}Verifying installation...${NC}"
-    sleep 5
-    if docker ps --format '{{.Names}}' | grep -q "npm-wg"; then
-        echo -e "${GREEN}✓ D3V-NPMWG container is running.${NC}"
-        echo -e "\n${GREEN}==================================================================${NC}"
-        echo -e "${GREEN}   D3V-NPMWG INSTALLED SUCCESSFULLY!${NC}"
-        echo -e "${GREEN}==================================================================${NC}"
-        echo -e "${YELLOW}Web UI Admin  : http://$WG_HOST:81${NC}"
-        echo -e "${YELLOW}HTTP Proxy    : Port 80${NC}"
-        echo -e "${YELLOW}HTTPS Proxy   : Port 443${NC}"
-        echo -e "${YELLOW}WireGuard UDP : Port 51820${NC}"
-        echo -e "\nWait about 30-60 seconds for the first initiation, then"
-        echo -e "access the Web UI and create your administrator account."
-        echo -e "${GREEN}==================================================================${NC}"
+    # --- Pull & Start ---
+    log_step "Pulling Docker image (this may take a few minutes)..."
+    local dc
+    dc=$(get_compose_cmd)
+    cd "$INSTALL_DIR"
+    $dc pull
+    log_ok "Image pulled."
+
+    log_step "Starting containers..."
+    $dc up -d
+    log_ok "Containers started."
+
+    # --- Verify ---
+    log_step "Waiting for container to become healthy (10s)..."
+    sleep 10
+
+    if docker ps --format '{{.Names}}' | grep -q "$CONTAINER_NAME"; then
+        echo ""
+        separator
+        echo -e "${GREEN}${BOLD}   D3V-NPMWG INSTALLED SUCCESSFULLY!${NC}"
+        separator
+        echo -e "  ${CYAN}Web Admin UI${NC}  : ${BOLD}http://${wg_host}:81${NC}"
+        echo -e "  ${CYAN}HTTP Proxy${NC}    : port 80"
+        echo -e "  ${CYAN}HTTPS Proxy${NC}   : port 443"
+        echo -e "  ${CYAN}WireGuard VPN${NC} : port 51820/udp"
+        echo ""
+        echo -e "  Open the Web UI in ~30s and create your admin account."
+        separator
     else
-        echo -e "${RED}✗ Error: D3V-NPMWG container failed to start.${NC}"
-        echo -e "Check logs using: docker logs npm-wg"
+        log_err "Container did not start. Check logs:"
+        echo -e "  docker logs ${CONTAINER_NAME}"
     fi
 }
 
-function uninstall_npm_wg() {
-    check_root
-    echo -e "${RED}WARNING: This will completely remove D3V-NPMWG and all its data!${NC}"
-    read -p "Are you sure? (y/N): " confirm
-    if [[ "$confirm" == [yY] || "$confirm" == [yY][eE][sS] ]]; then
-        if [ -d "$INSTALL_DIR" ]; then
-            cd "$INSTALL_DIR" || exit
-            local dc_cmd=$(get_docker_compose_cmd)
-            $dc_cmd down -v
-            cd /
-            rm -rf "$INSTALL_DIR"
-            echo -e "${GREEN}D3V-NPMWG uninstalled completely.${NC}"
-        else
-            echo -e "${YELLOW}D3V-NPMWG is not installed in $INSTALL_DIR.${NC}"
-        fi
-    fi
-}
+# -----------------------------------------------------------
+#  3. Uninstall D3V-NPMWG
+# -----------------------------------------------------------
+do_uninstall() {
+    require_root
 
-function uninstall_system_deps() {
-    check_root
-    echo -e "${RED}WARNING: This will attempt to uninstall Docker and Docker Compose from your system!${NC}"
-    read -p "Do you want to proceed? (y/N): " confirm
-    if [[ "$confirm" == [yY] || "$confirm" == [yY][eE][sS] ]]; then
-        echo -e "${YELLOW}Uninstalling Docker and components...${NC}"
-        apt-get purge -y docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin || true
-        apt-get autoremove -y --purge || true
-        echo -e "${GREEN}System components uninstalled (if they were installed via apt).${NC}"
-    fi
-}
-
-function reset_password() {
-    check_root
-    
-    if ! docker ps | grep -q npm-wg; then
-        echo -e "${RED}Container npm-wg is not running or not found. Please start it first.${NC}"
-        return
-    fi
-    
-    echo -e "${YELLOW}Resetting admin password...${NC}"
-    # Setting password to 'changeme'
-    # HASH for 'changeme'
-    local HASH="\$2y\$10\$k1r.q/q.T5lPqG3y8H148ei/i.k9K.cI.1s/Q/8Fz/5e.d.f4n.6e"
-    
-    docker exec -it npm-wg /bin/sh -c "sqlite3 /data/database.sqlite \"UPDATE user SET is_deleted=0 WHERE id=1;\""
-    docker exec -it npm-wg /bin/sh -c "sqlite3 /data/database.sqlite \"UPDATE auth SET secret='${HASH}' WHERE user_id=1;\""
-    docker exec -it npm-wg /bin/sh -c "sqlite3 /data/database.sqlite \"UPDATE user SET email='admin@example.com' WHERE id=1;\""
-    
-    echo -e "${GREEN}Password has been reset successfully!${NC}"
-    echo -e "Login Email: admin@example.com"
-    echo -e "Password:    changeme"
-    echo -e "${YELLOW}Please log in and change your password immediately!${NC}"
-}
-
-function update_npm_wg() {
-    check_root
     if [ ! -d "$INSTALL_DIR" ]; then
-        echo -e "${RED}NPM-WG is not installed in $INSTALL_DIR.${NC}"
+        log_warn "D3V-NPMWG is not installed at ${INSTALL_DIR}."
         return
     fi
-    
-    echo -e "${YELLOW}Updating D3V-NPMWG...${NC}"
-    cd "$INSTALL_DIR" || exit
-    
-    local dc_cmd=$(get_docker_compose_cmd)
-    $dc_cmd pull
-    $dc_cmd up -d
-    
-    echo -e "${GREEN}D3V-NPMWG updated successfully!${NC}"
-    docker image prune -f
+
+    log_warn "This will stop and remove D3V-NPMWG and ALL its data."
+    read -rp "$(echo -e "${RED}Are you sure? (y/N): ${NC}")" confirm
+    if [[ ! "$confirm" =~ ^[yY]$ ]]; then
+        echo "Cancelled."
+        return
+    fi
+
+    log_step "Stopping containers..."
+    local dc
+    dc=$(get_compose_cmd)
+    cd "$INSTALL_DIR" && $dc down -v 2>/dev/null || true
+    cd /
+
+    log_step "Removing ${INSTALL_DIR}..."
+    rm -rf "$INSTALL_DIR"
+    log_ok "D3V-NPMWG uninstalled."
 }
 
-function show_usage() {
-    echo -e "  install   : Install D3V-NPMWG and system deps"
-    echo -e "  uninstall : Uninstall D3V-NPMWG and remove data"
-    echo -e "  purge     : Uninstall D3V-NPMWG AND system dependencies (Docker)"
-    echo -e "  reset     : Reset web admin password"
-    echo -e "  update    : Update D3V-NPMWG to the latest version"
-    echo -e "  menu      : Show the interactive menu"
+# -----------------------------------------------------------
+#  4. Purge — uninstall app + system deps (Docker)
+# -----------------------------------------------------------
+do_purge() {
+    require_root
+    do_uninstall
+
+    echo ""
+    log_warn "Do you also want to remove Docker and Docker Compose from this system?"
+    read -rp "$(echo -e "${RED}Remove Docker? (y/N): ${NC}")" confirm
+    if [[ ! "$confirm" =~ ^[yY]$ ]]; then
+        echo "Skipped Docker removal."
+        return
+    fi
+
+    log_step "Removing Docker packages..."
+    apt-get purge -y docker-ce docker-ce-cli containerd.io \
+        docker-compose-plugin docker-buildx-plugin 2>/dev/null || true
+    apt-get autoremove -y --purge 2>/dev/null || true
+    log_ok "Docker and related packages removed."
 }
 
-function menu() {
+# -----------------------------------------------------------
+#  5. Reset admin password
+# -----------------------------------------------------------
+do_reset_password() {
+    require_root
+
+    if ! docker ps --format '{{.Names}}' | grep -q "$CONTAINER_NAME"; then
+        log_err "Container ${CONTAINER_NAME} is not running. Start it first."
+        return
+    fi
+
+    read -rp "$(echo -e "${CYAN}[?]${NC} New admin email [admin@example.com]: ")" new_email
+    new_email="${new_email:-admin@example.com}"
+
+    read -rsp "$(echo -e "${CYAN}[?]${NC} New password [changeme]: ")" new_pass
+    echo ""
+    new_pass="${new_pass:-changeme}"
+
+    log_step "Resetting admin credentials inside container..."
+
+    docker exec "$CONTAINER_NAME" node -e "
+        import('bcrypt').then(async bcrypt => {
+            const hash = await bcrypt.hash('${new_pass}', 13);
+            const knex = (await import('/app/db.js')).default;
+            await knex('auth').where('user_id', 1).update({ secret: hash });
+            await knex('user').where('id', 1).update({ email: '${new_email}', is_deleted: 0, is_disabled: 0 });
+            console.log('OK');
+            process.exit(0);
+        }).catch(e => { console.error(e); process.exit(1); });
+    "
+
+    if [ $? -eq 0 ]; then
+        log_ok "Credentials updated."
+        echo -e "  Email    : ${BOLD}${new_email}${NC}"
+        echo -e "  Password : ${BOLD}${new_pass}${NC}"
+        log_warn "Please change your password after logging in."
+    else
+        log_err "Failed to reset password. Check container logs."
+    fi
+}
+
+# -----------------------------------------------------------
+#  6. Update D3V-NPMWG
+# -----------------------------------------------------------
+do_update() {
+    require_root
+
+    if [ ! -d "$INSTALL_DIR" ]; then
+        log_err "D3V-NPMWG is not installed. Install it first."
+        return
+    fi
+
+    log_step "Pulling latest image..."
+    local dc
+    dc=$(get_compose_cmd)
+    cd "$INSTALL_DIR"
+    $dc pull
+    log_ok "Image pulled."
+
+    log_step "Recreating containers..."
+    $dc up -d
+    log_ok "D3V-NPMWG updated."
+
+    log_step "Cleaning old images..."
+    docker image prune -f > /dev/null 2>&1
+    log_ok "Done."
+}
+
+# -----------------------------------------------------------
+#  Interactive menu
+# -----------------------------------------------------------
+show_menu() {
     while true; do
-        echo -e "\n${GREEN}=== D3V-NPMWG Installation Manager ===${NC}"
-        echo "1. Install D3V-NPMWG (Cài đặt)"
-        echo "2. Uninstall D3V-NPMWG (Gỡ cài đặt)"
-        echo "3. Uninstall System Components (Gỡ cài đặt Docker/Compose)"
-        echo "4. Reset Web Admin Password (Đặt lại mật khẩu)"
-        echo "5. Update D3V-NPMWG (Cập nhật phiên bản mới)"
-        echo "6. Exit (Thoát)"
-        read -p "Select an option (1-6): " choice
-        
-        case $choice in
-            1) install_npm_wg ;;
-            2) uninstall_npm_wg ;;
-            3) uninstall_system_deps ;;
-            4) reset_password ;;
-            5) update_npm_wg ;;
-            6) echo -e "${GREEN}Goodbye!${NC}"; exit 0 ;;
-            *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
+        echo ""
+        separator
+        echo -e "${BOLD}  D3V-NPMWG Installation Manager${NC}"
+        separator
+        echo "  1) Install D3V-NPMWG"
+        echo "  2) Uninstall D3V-NPMWG"
+        echo "  3) Uninstall D3V-NPMWG + Docker (Purge)"
+        echo "  4) Reset Admin Password"
+        echo "  5) Update D3V-NPMWG"
+        echo "  6) Exit"
+        separator
+        read -rp "  Select [1-6]: " choice
+        echo ""
+        case "$choice" in
+            1) do_install ;;
+            2) do_uninstall ;;
+            3) do_purge ;;
+            4) do_reset_password ;;
+            5) do_update ;;
+            6) echo "Bye!"; exit 0 ;;
+            *) log_err "Invalid option." ;;
         esac
     done
 }
 
-# Entry point
+show_help() {
+    echo "Usage: $0 [command]"
+    echo ""
+    echo "Commands:"
+    echo "  install     Install D3V-NPMWG and dependencies"
+    echo "  uninstall   Remove D3V-NPMWG (keeps Docker)"
+    echo "  purge       Remove D3V-NPMWG AND Docker"
+    echo "  reset       Reset web admin password"
+    echo "  update      Pull latest image and restart"
+    echo "  help        Show this help"
+    echo ""
+    echo "Run without arguments to open the interactive menu."
+}
+
+# -----------------------------------------------------------
+#  Entry point
+# -----------------------------------------------------------
 if [ "$#" -eq 0 ]; then
-    menu
+    show_menu
 else
     case "$1" in
-        install) install_npm_wg ;;
-        uninstall) uninstall_npm_wg ;;
-        purge) 
-            uninstall_npm_wg
-            uninstall_system_deps
-            ;;
-        reset) reset_password ;;
-        update) update_npm_wg ;;
-        menu) menu ;;
-        -h|--help|help) show_usage ;;
-        *) 
-            echo -e "${RED}Invalid command: $1${NC}"
-            show_usage
+        install)    do_install ;;
+        uninstall)  do_uninstall ;;
+        purge)      do_purge ;;
+        reset)      do_reset_password ;;
+        update)     do_update ;;
+        help|-h|--help) show_help ;;
+        *)
+            log_err "Unknown command: $1"
+            show_help
             exit 1
             ;;
     esac
