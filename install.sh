@@ -18,16 +18,31 @@ function check_root() {
 }
 
 function check_dependencies() {
+    echo -e "${YELLOW}Checking system dependencies...${NC}"
+    
+    # Check curl
+    if ! command -v curl &> /dev/null; then
+        echo -e "${YELLOW}curl is missing. Installing curl...${NC}"
+        apt-get update && apt-get install -y curl
+    fi
+
+    # Check Docker
     if ! command -v docker &> /dev/null; then
         echo -e "${YELLOW}Docker is not installed. Installing Docker...${NC}"
         curl -fsSL https://get.docker.com -o get-docker.sh
         sh get-docker.sh
         rm get-docker.sh
+        systemctl enable --now docker
+    else
+        echo -e "${GREEN}Docker is already installed.${NC}"
     fi
 
-    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
-        echo -e "${YELLOW}Docker Compose is not installed. Please install Docker Compose first.${NC}"
-        exit 1
+    # Check Docker Compose (plugin or standalone)
+    if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
+        echo -e "${YELLOW}Docker Compose is missing. Installing Docker Compose plugin...${NC}"
+        apt-get update && apt-get install -y docker-compose-plugin
+    else
+        echo -e "${GREEN}Docker Compose is already installed.${NC}"
     fi
 }
 
@@ -90,14 +105,14 @@ EOF
     local dc_cmd=$(get_docker_compose_cmd)
     $dc_cmd up -d
     
-    echo -e "${GREEN}NPM-WG installed and started successfully!${NC}"
+    echo -e "${GREEN}D3V-NPMWG installed and started successfully!${NC}"
     echo -e "${YELLOW}Web UI: http://<your-ip>:81${NC}"
     echo -e "Wait a minute for the first boot, then follow the setup wizard on the Web UI to create your admin account."
 }
 
 function uninstall_npm_wg() {
     check_root
-    echo -e "${RED}WARNING: This will completely remove NPM-WG and all its data!${NC}"
+    echo -e "${RED}WARNING: This will completely remove D3V-NPMWG and all its data!${NC}"
     read -p "Are you sure? (y/N): " confirm
     if [[ "$confirm" == [yY] || "$confirm" == [yY][eE][sS] ]]; then
         if [ -d "$INSTALL_DIR" ]; then
@@ -106,10 +121,22 @@ function uninstall_npm_wg() {
             $dc_cmd down -v
             cd /
             rm -rf "$INSTALL_DIR"
-            echo -e "${GREEN}NPM-WG uninstalled completely.${NC}"
+            echo -e "${GREEN}D3V-NPMWG uninstalled completely.${NC}"
         else
-            echo -e "${YELLOW}NPM-WG is not installed in $INSTALL_DIR.${NC}"
+            echo -e "${YELLOW}D3V-NPMWG is not installed in $INSTALL_DIR.${NC}"
         fi
+    fi
+}
+
+function uninstall_system_deps() {
+    check_root
+    echo -e "${RED}WARNING: This will attempt to uninstall Docker and Docker Compose from your system!${NC}"
+    read -p "Do you want to proceed? (y/N): " confirm
+    if [[ "$confirm" == [yY] || "$confirm" == [yY][eE][sS] ]]; then
+        echo -e "${YELLOW}Uninstalling Docker and components...${NC}"
+        apt-get purge -y docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin || true
+        apt-get autoremove -y --purge || true
+        echo -e "${GREEN}System components uninstalled (if they were installed via apt).${NC}"
     fi
 }
 
@@ -143,25 +170,24 @@ function update_npm_wg() {
         return
     fi
     
-    echo -e "${YELLOW}Updating NPM-WG...${NC}"
+    echo -e "${YELLOW}Updating D3V-NPMWG...${NC}"
     cd "$INSTALL_DIR" || exit
     
     local dc_cmd=$(get_docker_compose_cmd)
     $dc_cmd pull
     $dc_cmd up -d
     
-    echo -e "${GREEN}NPM-WG updated successfully!${NC}"
+    echo -e "${GREEN}D3V-NPMWG updated successfully!${NC}"
     docker image prune -f
 }
 
 function show_usage() {
-    echo -e "Usage: $0 {install|uninstall|reset|update|menu}"
-    echo -e "Commands:"
-    echo -e "  install   : Install D3V-NPMWG"
+    echo -e "  install   : Install D3V-NPMWG and system deps"
     echo -e "  uninstall : Uninstall D3V-NPMWG and remove data"
+    echo -e "  purge     : Uninstall D3V-NPMWG AND system dependencies (Docker)"
     echo -e "  reset     : Reset web admin password"
     echo -e "  update    : Update D3V-NPMWG to the latest version"
-    echo -e "  menu      : Show the interactive menu (default if no args provided)"
+    echo -e "  menu      : Show the interactive menu"
 }
 
 function menu() {
@@ -169,17 +195,19 @@ function menu() {
         echo -e "\n${GREEN}=== D3V-NPMWG Installation Manager ===${NC}"
         echo "1. Install D3V-NPMWG (Cài đặt)"
         echo "2. Uninstall D3V-NPMWG (Gỡ cài đặt)"
-        echo "3. Reset Web Admin Password (Đặt lại mật khẩu)"
-        echo "4. Update D3V-NPMWG (Cập nhật phiên bản mới)"
-        echo "5. Exit (Thoát)"
-        read -p "Select an option (1-5): " choice
+        echo "3. Uninstall System Components (Gỡ cài đặt Docker/Compose)"
+        echo "4. Reset Web Admin Password (Đặt lại mật khẩu)"
+        echo "5. Update D3V-NPMWG (Cập nhật phiên bản mới)"
+        echo "6. Exit (Thoát)"
+        read -p "Select an option (1-6): " choice
         
         case $choice in
             1) install_npm_wg ;;
             2) uninstall_npm_wg ;;
-            3) reset_password ;;
-            4) update_npm_wg ;;
-            5) echo -e "${GREEN}Goodbye!${NC}"; exit 0 ;;
+            3) uninstall_system_deps ;;
+            4) reset_password ;;
+            5) update_npm_wg ;;
+            6) echo -e "${GREEN}Goodbye!${NC}"; exit 0 ;;
             *) echo -e "${RED}Invalid option. Please try again.${NC}" ;;
         esac
     done
@@ -192,6 +220,10 @@ else
     case "$1" in
         install) install_npm_wg ;;
         uninstall) uninstall_npm_wg ;;
+        purge) 
+            uninstall_npm_wg
+            uninstall_system_deps
+            ;;
         reset) reset_password ;;
         update) update_npm_wg ;;
         menu) menu ;;
