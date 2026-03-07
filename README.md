@@ -25,7 +25,7 @@ The easiest way to install, update, and manage your D3V-NPMWG instance on Linux 
 
 ```bash
 # Download and run the install script
-curl -sSL https://raw.githubusercontent.com/xtcnet/D3V-NPMWG/main/install.sh -o install.sh
+curl -sSL https://raw.githubusercontent.com/xtcnet/D3V-NPMWG/master/install.sh -o install.sh
 chmod +x install.sh
 sudo ./install.sh
 ```
