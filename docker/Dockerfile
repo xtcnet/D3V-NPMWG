@@ -32,7 +32,7 @@ RUN echo "fs.file-max = 65535" > /etc/sysctl.conf \
 
 # s6 overlay
 COPY docker/scripts/install-s6 /tmp/install-s6
-RUN /tmp/install-s6 "${TARGETPLATFORM}" && rm -f /tmp/install-s6
+RUN chmod +x /tmp/install-s6 && /tmp/install-s6 "${TARGETPLATFORM}" && rm -f /tmp/install-s6
 
 EXPOSE 80 81 443 51820/udp
 
