@@ -25,7 +25,7 @@ The easiest way to install, update, and manage your D3V-NPMWG instance on Linux 
 
 ```bash
 # Download and run the install script
-curl -sSL https://raw.githubusercontent.com/npm-wg/npm-wg/main/install.sh -o install.sh
+curl -sSL https://raw.githubusercontent.com/xtcnet/D3V-NPMWG/main/install.sh -o install.sh
 chmod +x install.sh
 sudo ./install.sh
 ```
@@ -136,8 +136,8 @@ To build D3V-NPMWG from source, you must build the React frontend before buildin
 
 ```bash
 # Clone the repository
-git clone https://github.com/npm-wg/npm-wg.git
-cd npm-wg
+git clone https://github.com/xtcnet/D3V-NPMWG.git
+cd D3V-NPMWG
 
 # 1. Build the Frontend
 cd frontend
