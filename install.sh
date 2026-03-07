@@ -79,9 +79,13 @@ install_deps() {
     else
         log_step "Installing Docker... (this may take 1-2 minutes)"
         curl -fsSL https://get.docker.com | sh
-        systemctl enable --now docker
         log_ok "Docker installed."
     fi
+
+    # --- Ensure Docker daemon is running ---
+    log_step "Starting Docker service..."
+    systemctl enable docker > /dev/null 2>&1 || true
+    systemctl restart docker > /dev/null 2>&1 || true
 
     # --- Wait for Docker daemon ---
     log_step "Waiting for Docker daemon to be ready..."
@@ -173,7 +177,6 @@ do_install() {
     # --- Write docker-compose.yml ---
     log_step "Generating docker-compose.yml..."
     cat > "$COMPOSE_FILE" <<YAML
-version: "3.8"
 services:
   d3v-npmwg:
     image: ${IMAGE_NAME}
