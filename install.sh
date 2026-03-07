@@ -356,6 +356,32 @@ do_update() {
 }
 
 # -----------------------------------------------------------
+#  7. Toggle Port 81 (Admin UI)
+# -----------------------------------------------------------
+do_toggle_port_81() {
+    require_root
+    echo ""
+    log_warn "This feature uses iptables (DOCKER-USER chain) to block external access to port 81."
+    log_warn "When blocked, you can only access the Admin UI via the WireGuard VPN (http://10.8.0.1:81) or localhost."
+    echo ""
+    read -rp "$(echo -e "${CYAN}[?]${NC} Do you want to (B)lock or (U)nblock external access to port 81? [B/U]: ")" choice
+    if [[ "$choice" =~ ^[bB]$ ]]; then
+        log_step "Blocking external access to port 81..."
+        # Remove existing rule if any to avoid duplicates
+        iptables -D DOCKER-USER -p tcp --dport 81 -j DROP 2>/dev/null || true
+        # Add rule to block port 81
+        iptables -I DOCKER-USER -p tcp --dport 81 -j DROP
+        log_ok "External access to port 81 is now BLOCKED."
+    elif [[ "$choice" =~ ^[uU]$ ]]; then
+        log_step "Unblocking external access to port 81..."
+        iptables -D DOCKER-USER -p tcp --dport 81 -j DROP 2>/dev/null || true
+        log_ok "External access to port 81 is now UNBLOCKED (Public)."
+    else
+        log_err "Invalid choice. Cancelled."
+    fi
+}
+
+# -----------------------------------------------------------
 #  Interactive menu
 # -----------------------------------------------------------
 show_menu() {
@@ -369,9 +395,10 @@ show_menu() {
         echo "  3) Uninstall D3V-NPMWG + Docker (Purge)"
         echo "  4) Reset Admin Password"
         echo "  5) Update D3V-NPMWG"
-        echo "  6) Exit"
+        echo "  6) Toggle Admin Port 81 (Block/Unblock)"
+        echo "  7) Exit"
         separator
-        read -rp "  Select [1-6]: " choice
+        read -rp "  Select [1-7]: " choice
         echo ""
         case "$choice" in
             1) do_install ;;
@@ -379,7 +406,8 @@ show_menu() {
             3) do_purge ;;
             4) do_reset_password ;;
             5) do_update ;;
-            6) echo "Bye!"; exit 0 ;;
+            6) do_toggle_port_81 ;;
+            7) echo "Bye!"; exit 0 ;;
             *) log_err "Invalid option." ;;
         esac
     done
@@ -389,12 +417,13 @@ show_help() {
     echo "Usage: $0 [command]"
     echo ""
     echo "Commands:"
-    echo "  install     Install D3V-NPMWG and dependencies"
-    echo "  uninstall   Remove D3V-NPMWG (keeps Docker)"
-    echo "  purge       Remove D3V-NPMWG AND Docker"
-    echo "  reset       Reset web admin password"
-    echo "  update      Pull latest image and restart"
-    echo "  help        Show this help"
+    echo "  install      Install D3V-NPMWG and dependencies"
+    echo "  uninstall    Remove D3V-NPMWG (keeps Docker)"
+    echo "  purge        Remove D3V-NPMWG AND Docker"
+    echo "  reset        Reset web admin password"
+    echo "  update       Pull latest image and restart"
+    echo "  toggle-port  Block or unblock external access to Admin UI (Port 81) using iptables"
+    echo "  help         Show this help"
     echo ""
     echo "Run without arguments to open the interactive menu."
 }
@@ -406,11 +435,12 @@ if [ "$#" -eq 0 ]; then
     show_menu
 else
     case "$1" in
-        install)    do_install ;;
-        uninstall)  do_uninstall ;;
-        purge)      do_purge ;;
-        reset)      do_reset_password ;;
-        update)     do_update ;;
+        install)     do_install ;;
+        uninstall)   do_uninstall ;;
+        purge)       do_purge ;;
+        reset)       do_reset_password ;;
+        update)      do_update ;;
+        toggle-port) do_toggle_port_81 ;;
         help|-h|--help) show_help ;;
         *)
             log_err "Unknown command: $1"

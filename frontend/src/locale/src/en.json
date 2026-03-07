@@ -772,5 +772,8 @@
 	},
 	"users": {
 		"defaultMessage": "Users"
+	},
+	"wireguard": {
+		"defaultMessage": "WireGuard"
 	}
 }
