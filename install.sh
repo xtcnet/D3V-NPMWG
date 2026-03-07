@@ -178,10 +178,10 @@ function menu() {
 }
 
 # Run menu if no arguments, else run the command
-if [ $# -eq 0 ]; then
+if [ "$#" -eq 0 ]; then
     menu
 else
-    case $1 in
+    case "$1" in
         install) install_npm_wg ;;
         uninstall) uninstall_npm_wg ;;
         reset) reset_password ;;
