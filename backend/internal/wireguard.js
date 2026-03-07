@@ -1,0 +1,366 @@
+import fs from "fs";
+import { global as logger } from "../logger.js";
+import * as wgHelpers from "../lib/wg-helpers.js";
+
+const WG_INTERFACE_NAME = process.env.WG_INTERFACE_NAME || "wg0";
+const WG_DEFAULT_PORT = Number.parseInt(process.env.WG_PORT || "51820", 10);
+const WG_DEFAULT_MTU = Number.parseInt(process.env.WG_MTU || "1420", 10);
+const WG_DEFAULT_ADDRESS = process.env.WG_DEFAULT_ADDRESS || "10.8.0.0/24";
+const WG_DEFAULT_DNS = process.env.WG_DNS || "1.1.1.1, 8.8.8.8";
+const WG_HOST = process.env.WG_HOST || "";
+const WG_DEFAULT_ALLOWED_IPS = process.env.WG_ALLOWED_IPS || "0.0.0.0/0, ::/0";
+const WG_DEFAULT_PERSISTENT_KEEPALIVE = Number.parseInt(process.env.WG_PERSISTENT_KEEPALIVE || "25", 10);
+const WG_CONFIG_DIR = "/etc/wireguard";
+
+let cronTimer = null;
+
+const internalWireguard = {
+
+	/**
+	 * Get or create the WireGuard interface in DB
+	 */
+	async getOrCreateInterface(knex) {
+		let iface = await knex("wg_interface").first();
+		if (!iface) {
+			// Generate keys
+			const privateKey = await wgHelpers.generatePrivateKey();
+			const publicKey = await wgHelpers.getPublicKey(privateKey);
+
+			const [id] = await knex("wg_interface").insert({
+				name: WG_INTERFACE_NAME,
+				private_key: privateKey,
+				public_key: publicKey,
+				ipv4_cidr: WG_DEFAULT_ADDRESS,
+				listen_port: WG_DEFAULT_PORT,
+				mtu: WG_DEFAULT_MTU,
+				dns: WG_DEFAULT_DNS,
+				host: WG_HOST,
+				post_up: `iptables -A FORWARD -i %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE`,
+				post_down: `iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE`,
+				created_on: knex.fn.now(),
+				modified_on: knex.fn.now(),
+			});
+
+			iface = await knex("wg_interface").where("id", id).first();
+			logger.info("WireGuard interface created with new keypair");
+		}
+		return iface;
+	},
+
+	/**
+	 * Save WireGuard config to /etc/wireguard/wg0.conf and sync
+	 */
+	async saveConfig(knex) {
+		const iface = await this.getOrCreateInterface(knex);
+		const clients = await knex("wg_client").where("enabled", true);
+
+		// Generate server interface section
+		const parsed = wgHelpers.parseCIDR(iface.ipv4_cidr);
+		const serverAddress = `${parsed.firstHost}/${parsed.prefix}`;
+
+		let configContent = wgHelpers.generateServerInterface({
+			privateKey: iface.private_key,
+			address: serverAddress,
+			listenPort: iface.listen_port,
+			mtu: iface.mtu,
+			dns: null, // DNS is for clients, not server
+			postUp: iface.post_up,
+			postDown: iface.post_down,
+		});
+
+		// Generate peer sections for each enabled client
+		for (const client of clients) {
+			configContent += "\n\n" + wgHelpers.generateServerPeer({
+				publicKey: client.public_key,
+				preSharedKey: client.pre_shared_key,
+				allowedIps: `${client.ipv4_address}/32`,
+			});
+		}
+
+		configContent += "\n";
+
+		// Write config file
+		const configPath = `${WG_CONFIG_DIR}/${iface.name}.conf`;
+		fs.writeFileSync(configPath, configContent, { mode: 0o600 });
+		logger.info(`WireGuard config saved to ${configPath}`);
+
+		// Sync config
+		try {
+			await wgHelpers.wgSync(iface.name);
+			logger.info("WireGuard config synced");
+		} catch (err) {
+			logger.warn("WireGuard sync failed, may need full restart:", err.message);
+		}
+	},
+
+	/**
+	 * Start WireGuard interface
+	 */
+	async startup(knex) {
+		try {
+			const iface = await this.getOrCreateInterface(knex);
+
+			// Ensure config dir exists
+			if (!fs.existsSync(WG_CONFIG_DIR)) {
+				fs.mkdirSync(WG_CONFIG_DIR, { recursive: true });
+			}
+
+			// Save config first
+			await this.saveConfig(knex);
+
+			// Bring down if already up, then up
+			try {
+				await wgHelpers.wgDown(iface.name);
+			} catch (_) {
+				// Ignore if not up
+			}
+
+			await wgHelpers.wgUp(iface.name);
+			logger.info(`WireGuard interface ${iface.name} started on port ${iface.listen_port}`);
+
+			// Start cron job for expiration
+			this.startCronJob(knex);
+		} catch (err) {
+			logger.error("WireGuard startup failed:", err.message);
+			logger.warn("WireGuard features will be unavailable. Ensure the host supports WireGuard kernel module.");
+		}
+	},
+
+	/**
+	 * Shutdown WireGuard interface
+	 */
+	async shutdown(knex) {
+		if (cronTimer) {
+			clearInterval(cronTimer);
+			cronTimer = null;
+		}
+		try {
+			const iface = await knex("wg_interface").first();
+			if (iface) {
+				await wgHelpers.wgDown(iface.name);
+				logger.info(`WireGuard interface ${iface.name} stopped`);
+			}
+		} catch (err) {
+			logger.warn("WireGuard shutdown warning:", err.message);
+		}
+	},
+
+	/**
+	 * Get all clients with live status
+	 */
+	async getClients(knex) {
+		const iface = await this.getOrCreateInterface(knex);
+		const dbClients = await knex("wg_client").orderBy("created_on", "desc");
+
+		const clients = dbClients.map((c) => ({
+			id: c.id,
+			name: c.name,
+			enabled: c.enabled === 1 || c.enabled === true,
+			ipv4_address: c.ipv4_address,
+			public_key: c.public_key,
+			allowed_ips: c.allowed_ips,
+			persistent_keepalive: c.persistent_keepalive,
+			created_on: c.created_on,
+			updated_on: c.modified_on,
+			expires_at: c.expires_at,
+			// Live status (populated below)
+			latest_handshake_at: null,
+			endpoint: null,
+			transfer_rx: 0,
+			transfer_tx: 0,
+		}));
+
+		// Get live WireGuard status
+		try {
+			const dump = await wgHelpers.wgDump(iface.name);
+			for (const peer of dump) {
+				const client = clients.find((c) => c.public_key === peer.publicKey);
+				if (client) {
+					client.latest_handshake_at = peer.latestHandshakeAt;
+					client.endpoint = peer.endpoint;
+					client.transfer_rx = peer.transferRx;
+					client.transfer_tx = peer.transferTx;
+				}
+			}
+		} catch (_) {
+			// WireGuard may not be running
+		}
+
+		return clients;
+	},
+
+	/**
+	 * Create a new WireGuard client
+	 */
+	async createClient(knex, data) {
+		const iface = await this.getOrCreateInterface(knex);
+
+		// Generate keys
+		const privateKey = await wgHelpers.generatePrivateKey();
+		const publicKey = await wgHelpers.getPublicKey(privateKey);
+		const preSharedKey = await wgHelpers.generatePreSharedKey();
+
+		// Allocate IP
+		const existingClients = await knex("wg_client").select("ipv4_address");
+		const allocatedIPs = existingClients.map((c) => c.ipv4_address);
+		const ipv4Address = wgHelpers.findNextAvailableIP(iface.ipv4_cidr, allocatedIPs);
+
+		const clientData = {
+			name: data.name || "Unnamed Client",
+			enabled: true,
+			ipv4_address: ipv4Address,
+			private_key: privateKey,
+			public_key: publicKey,
+			pre_shared_key: preSharedKey,
+			allowed_ips: data.allowed_ips || WG_DEFAULT_ALLOWED_IPS,
+			persistent_keepalive: data.persistent_keepalive || WG_DEFAULT_PERSISTENT_KEEPALIVE,
+			expires_at: data.expires_at || null,
+			created_on: knex.fn.now(),
+			modified_on: knex.fn.now(),
+		};
+
+		const [id] = await knex("wg_client").insert(clientData);
+
+		// Sync WireGuard config
+		await this.saveConfig(knex);
+
+		return knex("wg_client").where("id", id).first();
+	},
+
+	/**
+	 * Delete a WireGuard client
+	 */
+	async deleteClient(knex, clientId) {
+		const client = await knex("wg_client").where("id", clientId).first();
+		if (!client) {
+			throw new Error("Client not found");
+		}
+
+		await knex("wg_client").where("id", clientId).del();
+		await this.saveConfig(knex);
+
+		return { success: true };
+	},
+
+	/**
+	 * Toggle a WireGuard client enabled/disabled
+	 */
+	async toggleClient(knex, clientId, enabled) {
+		const client = await knex("wg_client").where("id", clientId).first();
+		if (!client) {
+			throw new Error("Client not found");
+		}
+
+		await knex("wg_client").where("id", clientId).update({
+			enabled: enabled,
+			modified_on: knex.fn.now(),
+		});
+
+		await this.saveConfig(knex);
+
+		return knex("wg_client").where("id", clientId).first();
+	},
+
+	/**
+	 * Update a WireGuard client
+	 */
+	async updateClient(knex, clientId, data) {
+		const client = await knex("wg_client").where("id", clientId).first();
+		if (!client) {
+			throw new Error("Client not found");
+		}
+
+		const updateData = {};
+		if (data.name !== undefined) updateData.name = data.name;
+		if (data.allowed_ips !== undefined) updateData.allowed_ips = data.allowed_ips;
+		if (data.persistent_keepalive !== undefined) updateData.persistent_keepalive = data.persistent_keepalive;
+		if (data.expires_at !== undefined) updateData.expires_at = data.expires_at;
+		updateData.modified_on = knex.fn.now();
+
+		await knex("wg_client").where("id", clientId).update(updateData);
+		await this.saveConfig(knex);
+
+		return knex("wg_client").where("id", clientId).first();
+	},
+
+	/**
+	 * Get client configuration file content
+	 */
+	async getClientConfiguration(knex, clientId) {
+		const iface = await this.getOrCreateInterface(knex);
+		const client = await knex("wg_client").where("id", clientId).first();
+		if (!client) {
+			throw new Error("Client not found");
+		}
+
+		const endpoint = `${iface.host || "YOUR_SERVER_IP"}:${iface.listen_port}`;
+
+		return wgHelpers.generateClientConfig({
+			clientPrivateKey: client.private_key,
+			clientAddress: `${client.ipv4_address}/32`,
+			dns: iface.dns,
+			mtu: iface.mtu,
+			serverPublicKey: iface.public_key,
+			preSharedKey: client.pre_shared_key,
+			allowedIps: client.allowed_ips,
+			persistentKeepalive: client.persistent_keepalive,
+			endpoint: endpoint,
+		});
+	},
+
+	/**
+	 * Get QR code SVG for client config
+	 */
+	async getClientQRCode(knex, clientId) {
+		const config = await this.getClientConfiguration(knex, clientId);
+		return wgHelpers.generateQRCodeSVG(config);
+	},
+
+	/**
+	 * Get the WireGuard interface info
+	 */
+	async getInterfaceInfo(knex) {
+		const iface = await this.getOrCreateInterface(knex);
+		return {
+			id: iface.id,
+			name: iface.name,
+			public_key: iface.public_key,
+			ipv4_cidr: iface.ipv4_cidr,
+			listen_port: iface.listen_port,
+			mtu: iface.mtu,
+			dns: iface.dns,
+			host: iface.host,
+		};
+	},
+
+	/**
+	 * Cron job to check client expirations
+	 */
+	startCronJob(knex) {
+		cronTimer = setInterval(async () => {
+			try {
+				const clients = await knex("wg_client").where("enabled", true).whereNotNull("expires_at");
+				let needsSave = false;
+
+				for (const client of clients) {
+					if (new Date() > new Date(client.expires_at)) {
+						logger.info(`WireGuard client "${client.name}" (${client.id}) has expired, disabling.`);
+						await knex("wg_client").where("id", client.id).update({
+							enabled: false,
+							modified_on: knex.fn.now(),
+						});
+						needsSave = true;
+					}
+				}
+
+				if (needsSave) {
+					await this.saveConfig(knex);
+				}
+			} catch (err) {
+				logger.error("WireGuard cron job error:", err.message);
+			}
+		}, 60 * 1000); // every 60 seconds
+	},
+};
+
+export default internalWireguard;

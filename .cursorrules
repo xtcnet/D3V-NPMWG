@@ -1,0 +1,12 @@
+# AI Assistant Instructions
+
+You are working on **NPM-WG** (Nginx Proxy Manager + WireGuard).
+Whenever you start a task in this workspace or are asked to fix a bug, please **FIRST READ the file `AI_CONTEXT.md`** at the root of the project.
+
+It contains:
+- The backend API map for WireGuard integration.
+- Details about Knex DB schema limitations (ES Modules).
+- Fixes for line-endings (`CRLF` -> `LF`) requirements for Alpine Linux Docker build.
+- Important commands required for the `.tsx` Vite environment before Docker container builds.
+
+Do not start writing or refactoring WireGuard integration code without reading `AI_CONTEXT.md` first.
