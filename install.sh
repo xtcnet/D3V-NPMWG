@@ -129,6 +129,40 @@ install_deps() {
 }
 
 # -----------------------------------------------------------
+#  x. Generate docker-compose.yml
+# -----------------------------------------------------------
+generate_docker_compose() {
+    local host="$1"
+    if [ -z "$host" ]; then
+        log_err "generate_docker_compose: host is empty."
+        return 1
+    fi
+
+    log_step "Generating docker-compose.yml..."
+    cat > "$COMPOSE_FILE" <<YAML
+services:
+  d3v-npmwg:
+    image: ${IMAGE_NAME}
+    container_name: ${CONTAINER_NAME}
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+    network_mode: "host"
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+      - ./wireguard:/etc/wireguard
+    environment:
+      WG_HOST: "${host}"
+YAML
+    log_ok "docker-compose.yml created/updated."
+}
+
+# -----------------------------------------------------------
 #  2. Install D3V-NPMWG
 # -----------------------------------------------------------
 do_install() {
@@ -175,28 +209,7 @@ do_install() {
     log_ok "Directory created."
 
     # --- Write docker-compose.yml ---
-    log_step "Generating docker-compose.yml..."
-    cat > "$COMPOSE_FILE" <<YAML
-services:
-  d3v-npmwg:
-    image: ${IMAGE_NAME}
-    container_name: ${CONTAINER_NAME}
-    restart: unless-stopped
-    cap_add:
-      - NET_ADMIN
-      - SYS_MODULE
-    sysctls:
-      - net.ipv4.ip_forward=1
-      - net.ipv4.conf.all.src_valid_mark=1
-    network_mode: "host"
-    volumes:
-      - ./data:/data
-      - ./letsencrypt:/etc/letsencrypt
-      - ./wireguard:/etc/wireguard
-    environment:
-      WG_HOST: "${wg_host}"
-YAML
-    log_ok "docker-compose.yml created."
+    generate_docker_compose "$wg_host"
 
     # --- Pull & Start ---
     log_step "Pulling Docker image (this may take a few minutes)..."
@@ -330,28 +343,44 @@ do_reset_password() {
 do_update() {
     require_root
 
+    log_step "Checking for install.sh updates..."
+    local remote_script_url="https://raw.githubusercontent.com/xtcnet/D3V-NPMWG/master/install.sh"
+    if ! curl -sSL "$remote_script_url" | cmp -s "$0" -; then
+        log_warn "A newer version of install.sh is available. Updating script..."
+        curl -sSL "$remote_script_url" -o "$0"
+        chmod +x "$0"
+        log_ok "install.sh updated. Restarting update process..."
+        exec "$0" update
+        exit 0
+    else
+        log_ok "install.sh is up to date."
+    fi
+
     if [ ! -d "$INSTALL_DIR" ]; then
         log_err "D3V-NPMWG is not installed. Install it first."
         return
     fi
 
-    log_step "Pulling latest image..."
     local dc
     dc=$(get_compose_cmd)
-    cd "$INSTALL_DIR"
+    cd "$INSTALL_DIR" || return
+
+    # Save existing WG_HOST before regenerating template
+    local current_wg_host=""
+    if [ -f "docker-compose.yml" ]; then
+        # Safely extract WG_HOST value ignoring quotes and spaces
+        current_wg_host=$(grep -E 'WG_HOST:' docker-compose.yml | awk -F'"' '{print $2}')
+    fi
+    if [ -z "$current_wg_host" ]; then
+        current_wg_host=$(detect_public_ip)
+        log_warn "Could not extract WG_HOST. Using ${current_wg_host}."
+    fi
+
+    generate_docker_compose "$current_wg_host"
+
+    log_step "Pulling latest image..."
     $dc pull
     log_ok "Image pulled."
-
-    # Update older configs to use network_mode: "host"
-    if grep -q 'ports:' docker-compose.yml && grep -q '80:80' docker-compose.yml; then
-        log_step "Updating docker-compose.yml to use host network mode..."
-        sed -i 's/ports:/network_mode: "host"/g' docker-compose.yml
-        sed -i '/80:80/d' docker-compose.yml
-        sed -i '/81:81/d' docker-compose.yml
-        sed -i '/443:443/d' docker-compose.yml
-        sed -i '/51820-51830:51820-51830\/udp/d' docker-compose.yml
-        log_ok "docker-compose.yml updated."
-    fi
 
     log_step "Recreating containers..."
     $dc up -d
