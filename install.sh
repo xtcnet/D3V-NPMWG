@@ -342,6 +342,17 @@ do_update() {
     $dc pull
     log_ok "Image pulled."
 
+    # Update older configs to use network_mode: "host"
+    if grep -q 'ports:' docker-compose.yml && grep -q '80:80' docker-compose.yml; then
+        log_step "Updating docker-compose.yml to use host network mode..."
+        sed -i 's/ports:/network_mode: "host"/g' docker-compose.yml
+        sed -i '/80:80/d' docker-compose.yml
+        sed -i '/81:81/d' docker-compose.yml
+        sed -i '/443:443/d' docker-compose.yml
+        sed -i '/51820-51830:51820-51830\/udp/d' docker-compose.yml
+        log_ok "docker-compose.yml updated."
+    fi
+
     log_step "Recreating containers..."
     $dc up -d
     log_ok "D3V-NPMWG updated."
