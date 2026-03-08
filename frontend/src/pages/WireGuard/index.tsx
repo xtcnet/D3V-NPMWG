@@ -76,9 +76,10 @@ function WireGuard() {
 			(i.host && i.host.toLowerCase().includes(serverFilter.toLowerCase()))
 	);
 
-	const filteredClients = clients?.filter((c) => {
+	const filteredClients = clients?.filter((c: any) => {
 		// Filter by selected server
-		if (selectedServerId !== "all" && c.interfaceId !== selectedServerId) {
+		const cInterfaceId = c.interfaceId || c.interface_id;
+		if (selectedServerId !== "all" && cInterfaceId !== selectedServerId) {
 			return false;
 		}
 		// Filter by search text

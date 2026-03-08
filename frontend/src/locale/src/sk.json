@@ -766,5 +766,26 @@
 	},
 	"users": {
 		"defaultMessage": "Používatelia"
+	},
+	"wireguard-client": {
+		"defaultMessage": "WireGuard Klient"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "WireGuard Klienti"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard Klient} other {WireGuard Klientov}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "WireGuard Server"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "WireGuard Prepojenia Serverov"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "WireGuard Servery"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard Server} other {WireGuard Serverov}}"
 	}
 }

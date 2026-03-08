@@ -691,5 +691,26 @@
 	},
 	"users": {
 		"defaultMessage": "사용자"
+	},
+	"wireguard-client": {
+		"defaultMessage": "WireGuard 클라이언트"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "WireGuard 클라이언트"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard 클라이언트} other {WireGuard 클라이언트}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "WireGuard 서버"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "WireGuard 서버 링크"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "WireGuard 서버"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard 서버} other {WireGuard 서버}}"
 	}
 }

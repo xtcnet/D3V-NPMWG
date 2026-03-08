@@ -679,5 +679,26 @@
 	},
 	"users": {
 		"defaultMessage": "Kullanıcılar"
+	},
+	"wireguard-client": {
+		"defaultMessage": "WireGuard İstemcisi"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "WireGuard İstemcileri"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard İstemcisi} other {WireGuard İstemcileri}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "WireGuard Sunucusu"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "WireGuard Sunucu Bağlantıları"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "WireGuard Sunucuları"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard Sunucusu} other {WireGuard Sunucuları}}"
 	}
 }

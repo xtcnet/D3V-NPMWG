@@ -649,5 +649,26 @@
 	},
 	"users": {
 		"defaultMessage": "ユーザー"
+	},
+	"wireguard-client": {
+		"defaultMessage": "WireGuard クライアント"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "WireGuard クライアント"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard クライアント} other {WireGuard クライアント}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "WireGuard サーバー"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "WireGuard サーバーリンク"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "WireGuard サーバー"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard サーバー} other {WireGuard サーバー}}"
 	}
 }

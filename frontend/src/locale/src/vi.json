@@ -655,5 +655,26 @@
 	},
 	"users": {
 		"defaultMessage": "Danh sách người dùng"
+	},
+	"wireguard-client": {
+		"defaultMessage": "WireGuard Client"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "Danh sách WireGuard Client"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard Client} other {WireGuard Client}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "WireGuard Server"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "Liên kết WireGuard Server"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "Danh sách WireGuard Server"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard Server} other {WireGuard Server}}"
 	}
 }

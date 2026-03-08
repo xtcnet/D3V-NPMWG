@@ -679,5 +679,26 @@
 	},
 	"users": {
 		"defaultMessage": "Pengguna"
+	},
+	"wireguard-client": {
+		"defaultMessage": "Klien WireGuard"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "Klien WireGuard"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {Klien WireGuard} other {Klien WireGuard}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "Server WireGuard"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "Tautan Server WireGuard"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "Server WireGuard"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {Server WireGuard} other {Server WireGuard}}"
 	}
 }

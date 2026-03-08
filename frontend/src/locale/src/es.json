@@ -688,5 +688,26 @@
 	},
 	"users": {
 		"defaultMessage": "Usuarios"
+	},
+	"wireguard-client": {
+		"defaultMessage": "Cliente WireGuard"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "Clientes WireGuard"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {Cliente WireGuard} other {Clientes WireGuard}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "Servidor WireGuard"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "Enlaces de servidor WireGuard"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "Servidores WireGuard"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {Servidor WireGuard} other {Servidores WireGuard}}"
 	}
 }

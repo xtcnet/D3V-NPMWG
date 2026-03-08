@@ -679,5 +679,26 @@
 	},
 	"users": {
 		"defaultMessage": "Úsáideoirí"
+	},
+	"wireguard-client": {
+		"defaultMessage": "Cliant WireGuard"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "Cliaint WireGuard"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {Cliant WireGuard} other {Cliant WireGuard}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "Freastalaí WireGuard"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "Naisc Fhreastalaí WireGuard"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "Freastalaithe WireGuard"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {Freastalaí WireGuard} other {Freastalaí WireGuard}}"
 	}
 }

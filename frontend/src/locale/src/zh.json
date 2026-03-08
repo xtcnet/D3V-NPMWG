@@ -658,5 +658,26 @@
 	},
 	"users": {
 		"defaultMessage": "用户列表"
+	},
+	"wireguard-client": {
+		"defaultMessage": "WireGuard 客户端"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "WireGuard 客户端"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {个 WireGuard 客户端} other {个 WireGuard 客户端}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "WireGuard 服务器"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "WireGuard 服务器链接"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "WireGuard 服务器"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {个 WireGuard 服务器} other {个 WireGuard 服务器}}"
 	}
 }

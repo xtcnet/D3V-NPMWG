@@ -652,5 +652,26 @@
 	},
 	"users": {
 		"defaultMessage": "Пользователи"
+	},
+	"wireguard-client": {
+		"defaultMessage": "WireGuard Клиент"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "WireGuard Клиенты"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard Клиент} other {WireGuard Клиентов}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "WireGuard Сервер"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "Связи WireGuard Серверов"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "WireGuard Серверы"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard Сервер} other {WireGuard Серверов}}"
 	}
 }

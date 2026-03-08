@@ -772,5 +772,26 @@
 	},
 	"users": {
 		"defaultMessage": "Brukere"
+	},
+	"wireguard-client": {
+		"defaultMessage": "WireGuard Klient"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "WireGuard Klienter"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard Klient} other {WireGuard Klienter}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "WireGuard Server"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "WireGuard Serverforbindelser"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "WireGuard Servere"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard Server} other {WireGuard Servere}}"
 	}
 }

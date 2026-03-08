@@ -766,5 +766,26 @@
 	},
 	"users": {
 		"defaultMessage": "Felhasználók"
+	},
+	"wireguard-client": {
+		"defaultMessage": "WireGuard Kliens"
+	},
+	"wireguard-clients": {
+		"defaultMessage": "WireGuard Kliensek"
+	},
+	"wireguard-clients.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard Kliens} other {WireGuard Kliensek}}"
+	},
+	"wireguard-server": {
+		"defaultMessage": "WireGuard Szerver"
+	},
+	"wireguard-server-links": {
+		"defaultMessage": "WireGuard Szerver Kapcsolatok"
+	},
+	"wireguard-servers": {
+		"defaultMessage": "WireGuard Szerverek"
+	},
+	"wireguard-servers.count": {
+		"defaultMessage": "{count} {count, plural, one {WireGuard Szerver} other {WireGuard Szerverek}}"
 	}
 }
