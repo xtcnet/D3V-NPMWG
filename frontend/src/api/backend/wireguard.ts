@@ -11,6 +11,8 @@ export interface WgClient {
 	createdOn: string;
 	updatedOn: string;
 	expiresAt: string | null;
+	interfaceId: number;
+	interfaceName: string;
 	latestHandshakeAt: string | null;
 	endpoint: string | null;
 	transferRx: number;
@@ -26,17 +28,35 @@ export interface WgInterface {
 	mtu: number;
 	dns: string;
 	host: string;
+	isolateClients: boolean;
+	linkedServers: number[];
 }
 
 export async function getWgClients(): Promise<WgClient[]> {
 	return await api.get({ url: "/wireguard/client" });
 }
 
-export async function getWgInterface(): Promise<WgInterface> {
+export async function getWgInterfaces(): Promise<WgInterface[]> {
 	return await api.get({ url: "/wireguard" });
 }
 
-export async function createWgClient(data: { name: string }): Promise<WgClient> {
+export async function createWgInterface(data: { mtu?: number; dns?: string; host?: string; isolate_clients?: boolean; linked_servers?: number[] }): Promise<WgInterface> {
+	return await api.post({ url: "/wireguard", data });
+}
+
+export async function updateWgInterface(id: number, data: { mtu?: number; dns?: string; host?: string; isolate_clients?: boolean; linked_servers?: number[] }): Promise<WgInterface> {
+	return await api.put({ url: `/wireguard/${id}`, data });
+}
+
+export async function deleteWgInterface(id: number): Promise<boolean> {
+	return await api.del({ url: `/wireguard/${id}` });
+}
+
+export async function updateWgInterfaceLinks(id: number, data: { linked_servers: number[] }): Promise<WgInterface> {
+	return await api.post({ url: `/wireguard/${id}/links`, data });
+}
+
+export async function createWgClient(data: { name: string; interface_id?: number }): Promise<WgClient> {
 	return await api.post({ url: "/wireguard/client", data });
 }
 

@@ -12,7 +12,7 @@ const router = express.Router({
  * GET /api/wireguard
  * Get WireGuard interface info
  */
-router.get("/", async (req, res, next) => {
+router.get("/", async (_req, res, next) => {
 	try {
 		const knex = db();
 		const iface = await internalWireguard.getInterfaceInfo(knex);
@@ -26,7 +26,7 @@ router.get("/", async (req, res, next) => {
  * GET /api/wireguard/client
  * List all WireGuard clients with live status
  */
-router.get("/client", async (req, res, next) => {
+router.get("/client", async (_req, res, next) => {
 	try {
 		const knex = db();
 		const clients = await internalWireguard.getClients(knex);

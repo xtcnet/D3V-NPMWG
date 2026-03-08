@@ -22,29 +22,69 @@ const internalWireguard = {
 	async getOrCreateInterface(knex) {
 		let iface = await knex("wg_interface").first();
 		if (!iface) {
-			// Generate keys
-			const privateKey = await wgHelpers.generatePrivateKey();
-			const publicKey = await wgHelpers.getPublicKey(privateKey);
-
-			const [id] = await knex("wg_interface").insert({
-				name: WG_INTERFACE_NAME,
-				private_key: privateKey,
-				public_key: publicKey,
-				ipv4_cidr: WG_DEFAULT_ADDRESS,
-				listen_port: WG_DEFAULT_PORT,
-				mtu: WG_DEFAULT_MTU,
+			// Seed a default config if it doesn't exist
+			const insertData = {
+				name: "wg0",
+				listen_port: 51820,
+				ipv4_cidr: "10.0.0.1/24",
+				ipv6_cidr: null,
+				mtu: 1420,
 				dns: WG_DEFAULT_DNS,
 				host: WG_HOST,
-				post_up: `iptables -A FORWARD -i %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE`,
-				post_down: `iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE`,
+				post_up: "iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
+				post_down: "iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE",
 				created_on: knex.fn.now(),
 				modified_on: knex.fn.now(),
-			});
+			};
+			const [id] = await knex("wg_interface").insert(insertData);
 
 			iface = await knex("wg_interface").where("id", id).first();
-			logger.info("WireGuard interface created with new keypair");
+			logger.info("WireGuard interface created with default config");
 		}
 		return iface;
+	},
+
+	/**
+	 * Render PostUp and PostDown iptables rules based on interface, isolation, and links
+	 */
+	async renderIptablesRules(knex, iface) {
+		const basePostUp = [];
+		const basePostDown = [];
+
+		// Default forward and NAT
+		basePostUp.push("iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE");
+		basePostDown.push("iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE");
+
+		// Client Isolation: Prevent clients on this interface from communicating with each other
+		if (iface.isolate_clients) {
+			basePostUp.push("iptables -I FORWARD -i %i -o %i -j REJECT");
+			basePostDown.push("iptables -D FORWARD -i %i -o %i -j REJECT");
+		}
+
+		// Server Isolation (Default DROP) & Server Peering
+		// 1. By default, prevent this interface from talking to ANY OTHER wg+ interfaces
+		basePostUp.push("iptables -I FORWARD -i %i -o wg+ -j DROP");
+		basePostDown.push("iptables -D FORWARD -i %i -o wg+ -j DROP");
+
+		// 2. Fetch linked servers to punch holes in the DROP rule
+		// wg_server_link has interface_id_1 and interface_id_2
+		const links = await knex("wg_server_link")
+			.where("interface_id_1", iface.id)
+			.orWhere("interface_id_2", iface.id);
+
+		for (const link of links) {
+			const peerIfaceId = link.interface_id_1 === iface.id ? link.interface_id_2 : link.interface_id_1;
+			const peerIface = await knex("wg_interface").where("id", peerIfaceId).first();
+			if (peerIface) {
+				basePostUp.push(`iptables -I FORWARD -i %i -o ${peerIface.name} -j ACCEPT`);
+				basePostDown.push(`iptables -D FORWARD -i %i -o ${peerIface.name} -j ACCEPT`);
+			}
+		}
+
+		return {
+			postUp: basePostUp.join("; "),
+			postDown: basePostDown.join("; "),
+		};
 	},
 
 	/**

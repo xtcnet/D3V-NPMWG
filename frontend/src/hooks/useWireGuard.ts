@@ -1,7 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	getWgClients,
-	getWgInterface,
+	getWgInterfaces,
+	createWgInterface,
+	updateWgInterface,
+	deleteWgInterface,
+	updateWgInterfaceLinks,
 	createWgClient,
 	deleteWgClient,
 	enableWgClient,
@@ -20,19 +24,62 @@ export const useWgClients = (options = {}) => {
 	});
 };
 
-export const useWgInterface = (options = {}) => {
-	return useQuery<WgInterface, Error>({
-		queryKey: ["wg-interface"],
-		queryFn: getWgInterface,
-		staleTime: 60 * 1000,
+export const useWgInterfaces = (options = {}) => {
+	return useQuery<WgInterface[], Error>({
+		queryKey: ["wg-interfaces"],
+		queryFn: getWgInterfaces,
+		refetchInterval: 10000,
+		staleTime: 5000,
 		...options,
 	});
 };
 
+export const useCreateWgInterface = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (data: { mtu?: number; dns?: string; host?: string; isolate_clients?: boolean; linked_servers?: number[] }) => createWgInterface(data),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["wg-interfaces"] });
+		},
+	});
+};
+
+export const useUpdateWgInterface = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({ id, data }: { id: number; data: { mtu?: number; dns?: string; host?: string; isolate_clients?: boolean; linked_servers?: number[] } }) => updateWgInterface(id, data),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["wg-interfaces"] });
+		},
+	});
+};
+
+export const useDeleteWgInterface = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (id: number) => deleteWgInterface(id),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["wg-interfaces"] });
+			queryClient.invalidateQueries({ queryKey: ["wg-clients"] });
+		},
+	});
+};
+
+export const useUpdateWgInterfaceLinks = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({ id, data }: { id: number; data: { linked_servers: number[] } }) => updateWgInterfaceLinks(id, data),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["wg-interfaces"] });
+		},
+	});
+};
+
+
 export const useCreateWgClient = () => {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (data: { name: string }) => createWgClient(data),
+		mutationFn: (data: { name: string; interface_id?: number }) => createWgClient(data),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["wg-clients"] });
 		},

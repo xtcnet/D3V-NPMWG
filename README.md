@@ -1,10 +1,10 @@
-# D3V-NPMWG — Nginx Proxy Manager + WireGuard VPN
+# D3V-NPMWG — xGat3 + WireGuard VPN
 
-A powerful, all-in-one Docker container that combines **Nginx Proxy Manager** (reverse proxy with SSL) and **WireGuard VPN** management in a single, beautiful web interface.
+A powerful, all-in-one Docker container that combines **xGat3** (reverse proxy with SSL) and **WireGuard VPN** management in a single, beautiful web interface.
 
 ## ✨ Features
 
-### Nginx Proxy Manager
+### xGat3
 - 🌐 Reverse proxy management with a beautiful UI
 - 🔒 Free SSL certificates via Let's Encrypt
 - 🔀 Proxy hosts, redirection hosts, streams, and 404 hosts
@@ -170,7 +170,7 @@ Alternatively, you can run the helper script:
 
 ## 📜 Credits
 
-- [Nginx Proxy Manager](https://github.com/NginxProxyManager/nginx-proxy-manager) — Original proxy manager
+- [xGat3](https://github.com/NginxProxyManager/nginx-proxy-manager) — Original proxy manager
 - [wg-easy](https://github.com/wg-easy/wg-easy) — WireGuard management inspiration
 
 ## 📄 License

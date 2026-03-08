@@ -87,7 +87,7 @@ describe('OAuth with Authentik', () => {
 			// 	// we should be logged in
 			// 	cy.get('#root p.chakra-text')
 			// 		.first()
-			// 		.should('have.text', 'Nginx Proxy Manager');
+			// 		.should('have.text', 'xGat3');
 
 			// 	// logout:
 			// 	cy.clearLocalStorage();

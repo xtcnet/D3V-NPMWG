@@ -1,16 +1,34 @@
 import EasyModal, { useModal } from "ez-modal-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Modal from "react-bootstrap/Modal";
 import { Button } from "src/components";
+import type { WgInterface } from "src/api/backend/wireguard";
 
-const WireGuardClientModal = EasyModal.create(() => {
+interface WireGuardClientModalProps {
+	interfaces: WgInterface[];
+	defaultInterfaceId?: number;
+}
+
+const WireGuardClientModal = EasyModal.create(({ interfaces, defaultInterfaceId }: WireGuardClientModalProps) => {
 	const modal = useModal<any>();
 	const [name, setName] = useState("");
+	const [selectedInterfaceId, setSelectedInterfaceId] = useState<number>(0);
+
+	useEffect(() => {
+		if (defaultInterfaceId) {
+			setSelectedInterfaceId(defaultInterfaceId);
+		} else if (interfaces && interfaces.length > 0) {
+			setSelectedInterfaceId(interfaces[0].id);
+		}
+	}, [interfaces, defaultInterfaceId]);
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		if (name.trim()) {
-			modal.resolve({ name: name.trim() });
+		if (name.trim() && selectedInterfaceId) {
+			modal.resolve({ 
+				name: name.trim(),
+				interface_id: selectedInterfaceId
+			});
 			modal.hide();
 		}
 	};
@@ -31,7 +49,7 @@ const WireGuardClientModal = EasyModal.create(() => {
 				</Modal.Header>
 				<Modal.Body>
 					<div className="mb-3">
-						<label htmlFor="wg-client-name" className="form-label">
+						<label htmlFor="wg-client-name" className="form-label required">
 							Client Name
 						</label>
 						<input
@@ -48,12 +66,37 @@ const WireGuardClientModal = EasyModal.create(() => {
 							A friendly name to identify this client.
 						</div>
 					</div>
+
+					{interfaces && interfaces.length > 0 && (
+						<div className="mb-3">
+							<label htmlFor="wg-server-select" className="form-label required">
+								WireGuard Server
+							</label>
+							<select
+								className="form-select"
+								id="wg-server-select"
+								value={selectedInterfaceId}
+								onChange={(e) => setSelectedInterfaceId(Number(e.target.value))}
+								required
+							>
+								{interfaces.map(iface => (
+									<option key={iface.id} value={iface.id}>
+										{iface.name} ({iface.ipv4Cidr})
+									</option>
+								))}
+							</select>
+							<div className="form-text">
+								Select which server this client will connect to.
+							</div>
+						</div>
+					)}
+
 				</Modal.Body>
 				<Modal.Footer>
 					<Button data-bs-dismiss="modal" onClick={handleClose}>
 						Cancel
 					</Button>
-					<Button type="submit" className="ms-auto btn-primary" disabled={!name.trim()}>
+					<Button type="submit" className="ms-auto btn-primary" disabled={!name.trim() || !selectedInterfaceId}>
 						Create Client
 					</Button>
 				</Modal.Footer>

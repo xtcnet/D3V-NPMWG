@@ -3,7 +3,7 @@ set -e
 
 # ============================================================
 #  D3V-NPMWG Installer for Ubuntu/Debian
-#  Nginx Proxy Manager + WireGuard VPN
+#  xGat3 + WireGuard VPN
 #  https://github.com/xtcnet/D3V-NPMWG
 # ============================================================
 

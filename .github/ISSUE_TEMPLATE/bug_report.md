@@ -27,8 +27,8 @@ Are you in the right place?
 <!-- A clear and concise description of what the bug is. -->
 
 
-**Nginx Proxy Manager Version**
-<!-- What version of Nginx Proxy Manager is reported on the login page? -->
+**xGat3 Version**
+<!-- What version of xGat3 is reported on the login page? -->
 
 
 **To Reproduce**

@@ -1,22 +1,22 @@
 import { defineConfig, type DefaultTheme } from 'vitepress';
 
-// https://vitepress.dev/reference/site-config
+
 export default defineConfig({
-	title: "Nginx Proxy Manager",
+	title: "xGat3",
 	description: "Expose your services easily and securely",
 	head: [
 		["link", { rel: "icon", href: "/icon.png" }],
 		["meta", { name: "description", content: "Docker container and built in Web Application for managing Nginx proxy hosts with a simple, powerful interface, providing free SSL support via Let's Encrypt" }],
-		["meta", { property: "og:title", content: "Nginx Proxy Manager" }],
+		["meta", { property: "og:title", content: "xGat3" }],
 		["meta", { property: "og:description", content: "Docker container and built in Web Application for managing Nginx proxy hosts with a simple, powerful interface, providing free SSL support via Let's Encrypt"}],
 		["meta", { property: "og:type", content: "website" }],
-		["meta", { property: "og:url", content: "https://nginxproxymanager.com/" }],
-		["meta", { property: "og:image", content: "https://nginxproxymanager.com/icon.png" }],
+		["meta", { property: "og:url", content: "https://x.d3v.ac/" }],
+		["meta", { property: "og:image", content: "https://x.d3v.ac/icon.png" }],
 		["meta", { name: "twitter:card", content: "summary"}],
-		["meta", { name: "twitter:title", content: "Nginx Proxy Manager"}],
+		["meta", { name: "twitter:title", content: "xGat3"}],
 		["meta", { name: "twitter:description", content: "Docker container and built in Web Application for managing Nginx proxy hosts with a simple, powerful interface, providing free SSL support via Let's Encrypt"}],
-		["meta", { name: "twitter:image", content: "https://nginxproxymanager.com/icon.png"}],
-		["meta", { name: "twitter:alt", content: "Nginx Proxy Manager"}],
+		["meta", { name: "twitter:image", content: "https://x.d3v.ac/icon.png"}],
+		["meta", { name: "twitter:alt", content: "xGat3"}],
 		// GA
 		['script', { async: 'true', src: 'https://www.googletagmanager.com/gtag/js?id=G-TXT8F5WY5B'}],
 		['script', {}, "window.dataLayer = window.dataLayer || [];\nfunction gtag(){dataLayer.push(arguments);}\ngtag('js', new Date());\ngtag('config', 'G-TXT8F5WY5B');"],

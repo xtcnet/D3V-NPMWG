@@ -1,9 +1,9 @@
 # AI Context for NPM-WG Project
 
 ## 1. Project Overview
-**NPM-WG** is a custom fork of [Nginx Proxy Manager](https://github.com/NginxProxyManager/nginx-proxy-manager) integrated with **WireGuard VPN** management capabilities, inspired by `wg-easy`.
+**NPM-WG** is a custom fork of [xGat3](https://github.com/NginxProxyManager/nginx-proxy-manager) integrated with **WireGuard VPN** management capabilities, inspired by `wg-easy`.
 
-The project structure remains mostly identical to Nginx Proxy Manager, but specific backend and frontend modules have been added to manage WireGuard securely inside the Docker container without needing external dependencies.
+The project structure remains mostly identical to xGat3, but specific backend and frontend modules have been added to manage WireGuard securely inside the Docker container without needing external dependencies.
 
 ---
 
