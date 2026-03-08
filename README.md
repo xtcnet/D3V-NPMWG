@@ -50,7 +50,7 @@ docker run -d \
   -p 80:80 \
   -p 81:81 \
   -p 443:443 \
-  -p 51820:51820/udp \
+  -p 51820-51830:51820-51830/udp \
   -v npm-wg-data:/data \
   -v npm-wg-letsencrypt:/etc/letsencrypt \
   -v npm-wg-wireguard:/etc/wireguard \
@@ -77,7 +77,7 @@ services:
       - "80:80"       # HTTP
       - "81:81"       # Admin UI
       - "443:443"     # HTTPS
-      - "51820:51820/udp"  # WireGuard
+      - "51820-51830:51820-51830/udp"  # WireGuard Multi-Server Range
     volumes:
       - data:/data
       - letsencrypt:/etc/letsencrypt
@@ -120,7 +120,7 @@ volumes:
 | `80` | TCP | HTTP |
 | `81` | TCP | Admin Web UI |
 | `443` | TCP | HTTPS |
-| `51820` | UDP | WireGuard VPN |
+| `51820-51830` | UDP | WireGuard VPN Multi-Server Ports |
 
 ## 📖 Usage
 
