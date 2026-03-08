@@ -48,7 +48,7 @@ function timeAgo(date: string | null): string {
 }
 
 function WireGuard() {
-	const [activeTab, setActiveTab] = useState<"servers" | "clients">("clients");
+	const [activeTab, setActiveTab] = useState<"servers" | "clients">("servers");
 
 	const { data: clients, isLoading: clientsLoading } = useWgClients();
 	const { data: interfaces, isLoading: ifacesLoading } = useWgInterfaces();
@@ -107,6 +107,10 @@ function WireGuard() {
 
 	// Client Handlers
 	const handleNewClient = async () => {
+		if (!interfaces || interfaces.length === 0) {
+			alert("Bạn phải tạo một WireGuard Server trước khi tạo Client.");
+			return;
+		}
 		const result = (await EasyModal.show(WireGuardClientModal, { interfaces: interfaces || [] })) as any;
 		if (result && result.name && result.interface_id) {
 			createClient.mutate({ name: result.name, interface_id: result.interface_id });
@@ -175,15 +179,15 @@ function WireGuard() {
 				<div className="card-header">
 					<ul className="nav nav-tabs card-header-tabs" data-bs-toggle="tabs">
 						<li className="nav-item cursor-pointer">
-							<a className={`nav-link ${activeTab === "clients" ? "active" : ""}`} onClick={() => setActiveTab("clients")}>
-								<IconNetwork className="me-1" size={16}/> Clients
-								<span className="badge bg-green ms-2">{clients?.length || 0}</span>
-							</a>
-						</li>
-						<li className="nav-item cursor-pointer">
 							<a className={`nav-link ${activeTab === "servers" ? "active" : ""}`} onClick={() => setActiveTab("servers")}>
 								<IconServer className="me-1" size={16}/> Servers
 								<span className="badge bg-blue ms-2">{interfaces?.length || 0}</span>
+							</a>
+						</li>
+						<li className="nav-item cursor-pointer">
+							<a className={`nav-link ${activeTab === "clients" ? "active" : ""}`} onClick={() => setActiveTab("clients")}>
+								<IconNetwork className="me-1" size={16}/> Clients
+								<span className="badge bg-green ms-2">{clients?.length || 0}</span>
 							</a>
 						</li>
 					</ul>

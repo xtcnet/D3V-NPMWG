@@ -10,13 +10,13 @@ const router = express.Router({
 
 /**
  * GET /api/wireguard
- * Get WireGuard interface info
+ * Get WireGuard interfaces info
  */
 router.get("/", async (_req, res, next) => {
 	try {
 		const knex = db();
-		const iface = await internalWireguard.getInterfaceInfo(knex);
-		res.status(200).json(iface);
+		const ifaces = await internalWireguard.getInterfacesInfo(knex);
+		res.status(200).json(ifaces);
 	} catch (err) {
 		next(err);
 	}

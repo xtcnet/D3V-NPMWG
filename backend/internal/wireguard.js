@@ -357,20 +357,27 @@ const internalWireguard = {
 	},
 
 	/**
-	 * Get the WireGuard interface info
+	 * Get the WireGuard interfaces info
 	 */
-	async getInterfaceInfo(knex) {
-		const iface = await this.getOrCreateInterface(knex);
-		return {
-			id: iface.id,
-			name: iface.name,
-			public_key: iface.public_key,
-			ipv4_cidr: iface.ipv4_cidr,
-			listen_port: iface.listen_port,
-			mtu: iface.mtu,
-			dns: iface.dns,
-			host: iface.host,
-		};
+	async getInterfacesInfo(knex) {
+		const ifaces = await knex("wg_interface").select("*");
+		const allLinks = await knex("wg_server_link").select("*");
+
+		return ifaces.map((i) => {
+			const links = allLinks.filter(l => l.interface_id_1 === i.id || l.interface_id_2 === i.id);
+			return {
+				id: i.id,
+				name: i.name,
+				public_key: i.public_key,
+				ipv4_cidr: i.ipv4_cidr,
+				listen_port: i.listen_port,
+				mtu: i.mtu,
+				dns: i.dns,
+				host: i.host,
+				isolate_clients: i.isolate_clients,
+				linked_servers: links.map(l => l.interface_id_1 === i.id ? l.interface_id_2 : l.interface_id_1),
+			};
+		});
 	},
 
 	/**
