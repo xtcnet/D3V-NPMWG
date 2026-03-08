@@ -233,7 +233,9 @@ const internalWireguard = {
 	 * Create a new WireGuard client
 	 */
 	async createClient(knex, data) {
-		const iface = await this.getOrCreateInterface(knex);
+		const iface = data.interface_id 
+			? await knex("wg_interface").where("id", data.interface_id).first()
+			: await this.getOrCreateInterface(knex);
 
 		// Generate keys
 		const privateKey = await wgHelpers.generatePrivateKey();
@@ -241,7 +243,7 @@ const internalWireguard = {
 		const preSharedKey = await wgHelpers.generatePreSharedKey();
 
 		// Allocate IP
-		const existingClients = await knex("wg_client").select("ipv4_address");
+		const existingClients = await knex("wg_client").select("ipv4_address").where("interface_id", iface.id);
 		const allocatedIPs = existingClients.map((c) => c.ipv4_address);
 		const ipv4Address = wgHelpers.findNextAvailableIP(iface.ipv4_cidr, allocatedIPs);
 
@@ -255,6 +257,7 @@ const internalWireguard = {
 			allowed_ips: data.allowed_ips || WG_DEFAULT_ALLOWED_IPS,
 			persistent_keepalive: data.persistent_keepalive || WG_DEFAULT_PERSISTENT_KEEPALIVE,
 			expires_at: data.expires_at || null,
+			interface_id: iface.id,
 			created_on: knex.fn.now(),
 			modified_on: knex.fn.now(),
 		};
@@ -354,6 +357,122 @@ const internalWireguard = {
 	async getClientQRCode(knex, clientId) {
 		const config = await this.getClientConfiguration(knex, clientId);
 		return wgHelpers.generateQRCodeSVG(config);
+	},
+
+	/**
+	 * Create a new WireGuard Interface Endpoint
+	 */
+	async createInterface(knex, data) {
+		const existingIfaces = await knex("wg_interface").select("name", "listen_port");
+		const newIndex = existingIfaces.length;
+		
+		const name = `wg${newIndex}`;
+		const listen_port = 51820 + newIndex;
+		
+		// Attempt to grab /24 subnets, ex 10.8.0.0/24 -> 10.8.1.0/24
+		const ipv4_cidr = `10.8.${newIndex}.1/24`;
+		
+		// Generate keys
+		const privateKey = await wgHelpers.generatePrivateKey();
+		const publicKey = await wgHelpers.getPublicKey(privateKey);
+
+		const insertData = {
+			name,
+			private_key: privateKey,
+			public_key: publicKey,
+			listen_port,
+			ipv4_cidr,
+			ipv6_cidr: null,
+			mtu: data.mtu || WG_DEFAULT_MTU,
+			dns: data.dns || WG_DEFAULT_DNS,
+			host: data.host || WG_HOST,
+			isolate_clients: data.isolate_clients || false,
+			post_up: "iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
+			post_down: "iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE",
+			created_on: knex.fn.now(),
+			modified_on: knex.fn.now(),
+		};
+
+		const [id] = await knex("wg_interface").insert(insertData);
+		
+		const newIface = await knex("wg_interface").where("id", id).first();
+		
+		// Regenerate config and restart the new interface seamlessly
+		const parsed = wgHelpers.parseCIDR(newIface.ipv4_cidr);
+		let configContent = wgHelpers.generateServerInterface({
+			privateKey: newIface.private_key,
+			address: `${parsed.firstHost}/${parsed.prefix}`,
+			listenPort: newIface.listen_port,
+			mtu: newIface.mtu,
+			dns: null,
+			postUp: newIface.post_up,
+			postDown: newIface.post_down,
+		});
+		
+		fs.writeFileSync(`${WG_CONFIG_DIR}/${name}.conf`, configContent, { mode: 0o600 });
+		await wgHelpers.wgUp(name);
+		
+		return newIface;
+	},
+
+	/**
+	 * Update an existing Interface
+	 */
+	async updateInterface(knex, id, data) {
+		const iface = await knex("wg_interface").where("id", id).first();
+		if (!iface) throw new Error("Interface not found");
+		
+		const updateData = { modified_on: knex.fn.now() };
+		if (data.host !== undefined) updateData.host = data.host;
+		if (data.dns !== undefined) updateData.dns = data.dns;
+		if (data.mtu !== undefined) updateData.mtu = data.mtu;
+		if (data.isolate_clients !== undefined) updateData.isolate_clients = data.isolate_clients;
+		
+		await knex("wg_interface").where("id", id).update(updateData);
+		
+		await this.saveConfig(knex); // This will re-render IPTables and sync 
+		return knex("wg_interface").where("id", id).first();
+	},
+
+	/**
+	 * Delete an interface
+	 */
+	async deleteInterface(knex, id) {
+		const iface = await knex("wg_interface").where("id", id).first();
+		if (!iface) throw new Error("Interface not found");
+		
+		try {
+			await wgHelpers.wgDown(iface.name);
+			if (fs.existsSync(`${WG_CONFIG_DIR}/${iface.name}.conf`)) {
+				fs.unlinkSync(`${WG_CONFIG_DIR}/${iface.name}.conf`);
+			}
+		} catch (e) {
+			logger.warn(`Failed to teardown WG interface ${iface.name}: ${e.message}`);
+		}
+		
+		// Cascading deletion handles clients and links in DB schema
+		await knex("wg_interface").where("id", id).del();
+		return { success: true };
+	},
+
+	/**
+	 * Update Peering Links between WireGuard Interfaces
+	 */
+	async updateInterfaceLinks(knex, id, linkedServers) {
+		// Clean up existing links where this interface is involved
+		await knex("wg_server_link").where("interface_id_1", id).orWhere("interface_id_2", id).del();
+		
+		// Insert new ones
+		for (const peerId of linkedServers) {
+			if (peerId !== Number(id)) {
+				await knex("wg_server_link").insert({
+					interface_id_1: id,
+					interface_id_2: peerId
+				});
+			}
+		}
+		await this.saveConfig(knex);
+		return { success: true };
 	},
 
 	/**

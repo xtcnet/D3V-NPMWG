@@ -23,6 +23,62 @@ router.get("/", async (_req, res, next) => {
 });
 
 /**
+ * POST /api/wireguard
+ * Create a new WireGuard interface
+ */
+router.post("/", async (req, res, next) => {
+	try {
+		const knex = db();
+		const iface = await internalWireguard.createInterface(knex, req.body);
+		res.status(201).json(iface);
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
+ * PUT /api/wireguard/:id
+ * Update a WireGuard interface
+ */
+router.put("/:id", async (req, res, next) => {
+	try {
+		const knex = db();
+		const iface = await internalWireguard.updateInterface(knex, req.params.id, req.body);
+		res.status(200).json(iface);
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
+ * DELETE /api/wireguard/:id
+ * Delete a WireGuard interface
+ */
+router.delete("/:id", async (req, res, next) => {
+	try {
+		const knex = db();
+		const result = await internalWireguard.deleteInterface(knex, req.params.id);
+		res.status(200).json(result);
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
+ * POST /api/wireguard/:id/links
+ * Update peering links for a WireGuard interface
+ */
+router.post("/:id/links", async (req, res, next) => {
+	try {
+		const knex = db();
+		const result = await internalWireguard.updateInterfaceLinks(knex, req.params.id, req.body.linked_servers || []);
+		res.status(200).json(result);
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
  * GET /api/wireguard/client
  * List all WireGuard clients with live status
  */

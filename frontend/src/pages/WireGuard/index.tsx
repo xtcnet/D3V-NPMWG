@@ -63,6 +63,7 @@ function WireGuard() {
 	const toggleClient = useToggleWgClient();
 	
 	const [clientFilter, setClientFilter] = useState("");
+	const [serverFilter, setServerFilter] = useState("");
 
 	if (clientsLoading || ifacesLoading) {
 		return <Loading />;
@@ -74,6 +75,14 @@ function WireGuard() {
 			c.name.toLowerCase().includes(clientFilter.toLowerCase()) ||
 			c.ipv4Address.includes(clientFilter) ||
 			c.interfaceName?.toLowerCase().includes(clientFilter.toLowerCase()),
+	);
+
+	const filteredInterfaces = interfaces?.filter(
+		(i) =>
+			!serverFilter ||
+			i.name.toLowerCase().includes(serverFilter.toLowerCase()) ||
+			i.ipv4Cidr.includes(serverFilter) ||
+			(i.host && i.host.toLowerCase().includes(serverFilter.toLowerCase()))
 	);
 
 	// Server Handlers
@@ -147,30 +156,6 @@ function WireGuard() {
 							WireGuard VPN
 						</h2>
 					</div>
-					<div className="col-auto ms-auto d-print-none">
-						<div className="btn-list">
-							{activeTab === "servers" ? (
-								<button
-									type="button"
-									className="btn btn-primary d-none d-sm-inline-block"
-									onClick={handleNewServer}
-								>
-									<IconPlus size={16} className="me-1" />
-									New Server
-								</button>
-							) : (
-								<button
-									type="button"
-									className="btn btn-primary d-none d-sm-inline-block"
-									onClick={handleNewClient}
-									id="wg-new-client-btn"
-								>
-									<IconPlus size={16} className="me-1" />
-									New Client
-								</button>
-							)}
-						</div>
-					</div>
 				</div>
 			</div>
 
@@ -197,15 +182,30 @@ function WireGuard() {
 				{activeTab === "clients" && (
 					<div className="table-responsive">
 						<div className="p-3 border-bottom d-flex align-items-center justify-content-between">
-							<h3 className="card-title mb-0">Clients</h3>
-							<input
-								type="text"
-								className="form-control form-control-sm"
-								placeholder="Filter clients..."
-								value={clientFilter}
-								onChange={(e) => setClientFilter(e.target.value)}
-								style={{ width: 250 }}
-							/>
+							<div className="d-flex w-100 flex-column flex-md-row justify-content-between align-items-center">
+								<div className="text-muted d-none d-md-block">
+									Listing WireGuard Clients
+								</div>
+								<div className="d-flex flex-wrap gap-2 justify-content-md-end w-100 w-md-auto align-items-center">
+									<input
+										type="text"
+										className="form-control form-control-sm"
+										placeholder="Search clients..."
+										value={clientFilter}
+										onChange={(e) => setClientFilter(e.target.value)}
+										style={{ width: 250 }}
+									/>
+									<button
+										type="button"
+										className="btn btn-primary btn-sm"
+										onClick={handleNewClient}
+										id="wg-new-client-btn"
+									>
+										<IconPlus size={16} className="me-1" />
+										New Client
+									</button>
+								</div>
+							</div>
 						</div>
 						<table className="table table-vcenter table-nowrap card-table">
 							<thead>
@@ -327,6 +327,31 @@ function WireGuard() {
 
 				{activeTab === "servers" && (
 					<div className="table-responsive">
+						<div className="p-3 border-bottom d-flex align-items-center justify-content-between">
+							<div className="d-flex w-100 flex-column flex-md-row justify-content-between align-items-center">
+								<div className="text-muted d-none d-md-block">
+									Listing WireGuard Servers
+								</div>
+								<div className="d-flex flex-wrap gap-2 justify-content-md-end w-100 w-md-auto align-items-center">
+									<input
+										type="text"
+										className="form-control form-control-sm"
+										placeholder="Search servers..."
+										value={serverFilter}
+										onChange={(e) => setServerFilter(e.target.value)}
+										style={{ width: 250 }}
+									/>
+									<button
+										type="button"
+										className="btn btn-primary btn-sm"
+										onClick={handleNewServer}
+									>
+										<IconPlus size={16} className="me-1" />
+										New Server
+									</button>
+								</div>
+							</div>
+						</div>
 						<table className="table table-vcenter table-nowrap card-table">
 							<thead>
 								<tr>
@@ -340,7 +365,7 @@ function WireGuard() {
 								</tr>
 							</thead>
 							<tbody>
-								{interfaces?.map((iface) => (
+								{filteredInterfaces?.map((iface) => (
 									<tr key={iface.id}>
 										<td className="fw-bold">{iface.name}</td>
 										<td>
@@ -358,7 +383,7 @@ function WireGuard() {
 										<td>
 											<div className="d-flex align-items-center">
 												<span className="badge bg-azure me-2">{iface.linkedServers?.length || 0}</span>
-												{iface.linkedServers?.length > 0 && (
+												{iface.linkedServers?.length > 0 && interfaces && (
 													<span className="text-muted small">
 														({interfaces.filter(i => iface.linkedServers.includes(i.id)).map(i => i.name).join(", ")})
 													</span>
