@@ -47,10 +47,7 @@ docker run -d \
   --cap-add=SYS_MODULE \
   --sysctl net.ipv4.ip_forward=1 \
   --sysctl net.ipv4.conf.all.src_valid_mark=1 \
-  -p 80:80 \
-  -p 81:81 \
-  -p 443:443 \
-  -p 51820-51830:51820-51830/udp \
+  --network host \
   -v npm-wg-data:/data \
   -v npm-wg-letsencrypt:/etc/letsencrypt \
   -v npm-wg-wireguard:/etc/wireguard \
@@ -73,11 +70,7 @@ services:
     sysctls:
       - net.ipv4.ip_forward=1
       - net.ipv4.conf.all.src_valid_mark=1
-    ports:
-      - "80:80"       # HTTP
-      - "81:81"       # Admin UI
-      - "443:443"     # HTTPS
-      - "51820-51830:51820-51830/udp"  # WireGuard Multi-Server Range
+    network_mode: "host"
     volumes:
       - data:/data
       - letsencrypt:/etc/letsencrypt
