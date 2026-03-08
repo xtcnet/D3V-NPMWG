@@ -217,6 +217,7 @@ const internalWireguard = {
 			id: c.id,
 			name: c.name,
 			interfaceName: c.interface_name,
+			interfaceId: c.interface_id,
 			enabled: c.enabled === 1 || c.enabled === true,
 			ipv4_address: c.ipv4_address,
 			public_key: c.public_key,
