@@ -34,41 +34,11 @@ export function SiteFooter() {
 					<div className="col-12 col-lg-auto mt-3 mt-lg-0">
 						<ul className="list-inline list-inline-dots mb-0">
 							<li className="list-inline-item">
-								© 2025{" "}
-								<a href="https://jc21.com" rel="noreferrer" target="_blank" className="link-secondary">
-									jc21.com
-								</a>
+								© D3V.AC 2026{" "}
+								
 							</li>
-							<li className="list-inline-item">
-								Theme by{" "}
-								<a href="https://tabler.io" rel="noreferrer" target="_blank" className="link-secondary">
-									Tabler
-								</a>
-							</li>
-							<li className="list-inline-item">
-								<a
-									href={`https://github.com/NginxProxyManager/nginx-proxy-manager/releases/tag/${getVersion()}`}
-									className="link-secondary"
-									target="_blank"
-									rel="noopener"
-								>
-									{" "}
-									{getVersion()}{" "}
-								</a>
-							</li>
-							{versionData?.updateAvailable && versionData?.latest && (
-								<li className="list-inline-item">
-									<a
-										href={`https://github.com/NginxProxyManager/nginx-proxy-manager/releases/tag/${versionData.latest}`}
-										className="link-warning fw-bold"
-										target="_blank"
-										rel="noopener"
-										title={`New version ${versionData.latest} is available`}
-									>
-										<T id="update-available" data={{ latestVersion: versionData.latest }} />
-									</a>
-								</li>
-							)}
+							
+						
 						</ul>
 					</div>
 				</div>

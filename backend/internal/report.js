@@ -1,3 +1,4 @@
+import db from "../db.js";
 import internalDeadHost from "./dead-host.js";
 import internalProxyHost from "./proxy-host.js";
 import internalRedirectionHost from "./redirection-host.js";
@@ -23,15 +24,29 @@ const internalReport = {
 
 				return Promise.all(promises);
 			})
-			.then((counts) => {
+			.then(async (counts) => {
+				const knex = db();
+				let wgServers = 0;
+				let wgClients = 0;
+				try {
+					const srvResult = await knex("wg_interface").count("id as count").first();
+					wgServers = srvResult?.count || 0;
+					const cliResult = await knex("wg_client").count("id as count").first();
+					wgClients = cliResult?.count || 0;
+				} catch (_) {
+					// WireGuard tables may not exist yet
+				}
 				return {
 					proxy: counts.shift(),
 					redirection: counts.shift(),
 					stream: counts.shift(),
 					dead: counts.shift(),
+					wgServers: Number(wgServers),
+					wgClients: Number(wgClients),
 				};
 			});
 	},
 };
 
 export default internalReport;
+

@@ -1,4 +1,4 @@
-import { IconArrowsCross, IconBolt, IconBoltOff, IconDisc, IconLock, IconShield, IconUser } from "@tabler/icons-react";
+import { IconArrowsCross, IconBolt, IconBoltOff, IconDisc, IconLock, IconNetwork, IconServer, IconShield, IconUser } from "@tabler/icons-react";
 import cn from "classnames";
 import type { AuditLog } from "src/api/backend";
 import { useLocaleState } from "src/context";
@@ -17,6 +17,12 @@ const getEventValue = (event: AuditLog) => {
 			return event.meta?.incomingPort || "N/A";
 		case "certificate":
 			return event.meta?.domainNames?.join(", ") || event.meta?.niceName || "N/A";
+		case "wireguard-server":
+			return event.meta?.name || `Server #${event.objectId}`;
+		case "wireguard-client":
+			return event.meta?.name || `Client #${event.objectId}`;
+		case "wireguard-server-links":
+			return `Server #${event.objectId}`;
 		default:
 			return `UNKNOWN EVENT TYPE: ${event.objectType}`;
 	}
@@ -57,6 +63,13 @@ const getIcon = (row: AuditLog) => {
 			break;
 		case "certificate":
 			ico = <IconShield size={16} className={c} />;
+			break;
+		case "wireguard-server":
+		case "wireguard-server-links":
+			ico = <IconServer size={16} className={c} />;
+			break;
+		case "wireguard-client":
+			ico = <IconNetwork size={16} className={c} />;
 			break;
 	}
 

@@ -48,11 +48,9 @@ function timeAgo(date: string | null): string {
 }
 
 function WireGuard() {
-	const [activeTab, setActiveTab] = useState<"servers" | "clients">("servers");
-
 	const { data: clients, isLoading: clientsLoading } = useWgClients();
 	const { data: interfaces, isLoading: ifacesLoading } = useWgInterfaces();
-	
+
 	const createServer = useCreateWgInterface();
 	const updateServer = useUpdateWgInterface();
 	const deleteServer = useDeleteWgInterface();
@@ -61,21 +59,14 @@ function WireGuard() {
 	const createClient = useCreateWgClient();
 	const deleteClient = useDeleteWgClient();
 	const toggleClient = useToggleWgClient();
-	
+
 	const [clientFilter, setClientFilter] = useState("");
 	const [serverFilter, setServerFilter] = useState("");
+	const [selectedServerId, setSelectedServerId] = useState<number | "all">("all");
 
 	if (clientsLoading || ifacesLoading) {
 		return <Loading />;
 	}
-
-	const filteredClients = clients?.filter(
-		(c) =>
-			!clientFilter ||
-			c.name.toLowerCase().includes(clientFilter.toLowerCase()) ||
-			c.ipv4Address.includes(clientFilter) ||
-			c.interfaceName?.toLowerCase().includes(clientFilter.toLowerCase()),
-	);
 
 	const filteredInterfaces = interfaces?.filter(
 		(i) =>
@@ -84,6 +75,23 @@ function WireGuard() {
 			i.ipv4Cidr.includes(serverFilter) ||
 			(i.host && i.host.toLowerCase().includes(serverFilter.toLowerCase()))
 	);
+
+	const filteredClients = clients?.filter((c) => {
+		// Filter by selected server
+		if (selectedServerId !== "all" && c.interfaceId !== selectedServerId) {
+			return false;
+		}
+		// Filter by search text
+		if (
+			clientFilter &&
+			!c.name.toLowerCase().includes(clientFilter.toLowerCase()) &&
+			!c.ipv4Address.includes(clientFilter) &&
+			!c.interfaceName?.toLowerCase().includes(clientFilter.toLowerCase())
+		) {
+			return false;
+		}
+		return true;
+	});
 
 	// Server Handlers
 	const handleNewServer = async () => {
@@ -159,235 +167,225 @@ function WireGuard() {
 				</div>
 			</div>
 
-			{/* Tabs */}
+			{/* ================== SERVERS TABLE ================== */}
+			<div className="card mb-4">
+				<div className="card-header">
+					<h3 className="card-title">
+						<IconServer className="me-2" size={20} />
+						WireGuard Servers
+						<span className="badge bg-blue ms-2">{interfaces?.length || 0}</span>
+					</h3>
+				</div>
+				<div className="table-responsive">
+					<div className="p-3 border-bottom d-flex align-items-center justify-content-between">
+						<div className="d-flex w-100 flex-column flex-md-row justify-content-between align-items-center">
+							<div className="text-muted d-none d-md-block">
+								Listing WireGuard Servers
+							</div>
+							<div className="d-flex flex-wrap gap-2 justify-content-md-end w-100 w-md-auto align-items-center">
+								<input
+									type="text"
+									className="form-control form-control-sm"
+									placeholder="Search servers..."
+									value={serverFilter}
+									onChange={(e) => setServerFilter(e.target.value)}
+									style={{ width: 250 }}
+								/>
+								<button
+									type="button"
+									className="btn btn-primary btn-sm"
+									onClick={handleNewServer}
+									id="wg-new-server-btn"
+								>
+									<IconPlus size={16} className="me-1" />
+									New Server
+								</button>
+							</div>
+						</div>
+					</div>
+					<table className="table table-vcenter table-nowrap card-table">
+						<thead>
+							<tr>
+								<th>Interface</th>
+								<th>Subnet</th>
+								<th>Port</th>
+								<th>Endpoint Host</th>
+								<th>Isolation</th>
+								<th>Links</th>
+								<th className="text-end">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{filteredInterfaces?.map((iface) => (
+								<tr key={iface.id}>
+									<td className="fw-bold">{iface.name}</td>
+									<td>
+										<code>{iface.ipv4Cidr}</code>
+									</td>
+									<td>{iface.listenPort}</td>
+									<td className="text-muted">{iface.host || "None"}</td>
+									<td>
+										{iface.isolateClients ? (
+											<span className="badge bg-green text-green-fg">Enabled</span>
+										) : (
+											<span className="badge bg-secondary text-secondary-fg">Disabled</span>
+										)}
+									</td>
+									<td>
+										<div className="d-flex align-items-center">
+											<span className="badge bg-azure me-2">{iface.linkedServers?.length || 0}</span>
+											{iface.linkedServers?.length > 0 && interfaces && (
+												<span className="text-muted small">
+													({interfaces.filter(i => iface.linkedServers.includes(i.id)).map(i => i.name).join(", ")})
+												</span>
+											)}
+										</div>
+									</td>
+									<td className="text-end">
+										<div className="btn-group btn-group-sm">
+											<button
+												type="button"
+												className="btn btn-outline-primary"
+												title="Linked Servers"
+												onClick={() => handleManageLinks(iface)}
+											>
+												<IconLink size={16} />
+											</button>
+											<button
+												type="button"
+												className="btn btn-outline-primary"
+												title="Edit Server"
+												onClick={() => handleEditServer(iface)}
+											>
+												<IconEdit size={16} />
+											</button>
+											<button
+												type="button"
+												className="btn btn-outline-danger"
+												title="Delete Server"
+												onClick={() => handleDeleteServer(iface.id, iface.name)}
+											>
+												<IconTrash size={16} />
+											</button>
+										</div>
+									</td>
+								</tr>
+							))}
+							{(!filteredInterfaces || filteredInterfaces.length === 0) && (
+								<tr>
+									<td colSpan={7} className="text-center text-muted py-5">
+										{serverFilter
+											? "No servers match your filter"
+											: "No WireGuard servers configured. Click 'New Server' to create one."}
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+			</div>
+
+			{/* ================== CLIENTS TABLE ================== */}
 			<div className="card">
 				<div className="card-header">
-					<ul className="nav nav-tabs card-header-tabs" data-bs-toggle="tabs">
-						<li className="nav-item cursor-pointer">
-							<a className={`nav-link ${activeTab === "servers" ? "active" : ""}`} onClick={() => setActiveTab("servers")}>
-								<IconServer className="me-1" size={16}/> Servers
-								<span className="badge bg-blue ms-2">{interfaces?.length || 0}</span>
-							</a>
-						</li>
-						<li className="nav-item cursor-pointer">
-							<a className={`nav-link ${activeTab === "clients" ? "active" : ""}`} onClick={() => setActiveTab("clients")}>
-								<IconNetwork className="me-1" size={16}/> Clients
-								<span className="badge bg-green ms-2">{clients?.length || 0}</span>
-							</a>
-						</li>
-					</ul>
+					<h3 className="card-title">
+						<IconNetwork className="me-2" size={20} />
+						WireGuard Clients
+						<span className="badge bg-green ms-2">{clients?.length || 0}</span>
+					</h3>
 				</div>
-
-				{/* Tab Content */}
-				{activeTab === "clients" && (
-					<div className="table-responsive">
-						<div className="p-3 border-bottom d-flex align-items-center justify-content-between">
-							<div className="d-flex w-100 flex-column flex-md-row justify-content-between align-items-center">
-								<div className="text-muted d-none d-md-block">
-									Listing WireGuard Clients
-								</div>
-								<div className="d-flex flex-wrap gap-2 justify-content-md-end w-100 w-md-auto align-items-center">
-									<input
-										type="text"
-										className="form-control form-control-sm"
-										placeholder="Search clients..."
-										value={clientFilter}
-										onChange={(e) => setClientFilter(e.target.value)}
-										style={{ width: 250 }}
-									/>
-									<button
-										type="button"
-										className="btn btn-primary btn-sm"
-										onClick={handleNewClient}
-										id="wg-new-client-btn"
-									>
-										<IconPlus size={16} className="me-1" />
-										New Client
-									</button>
-								</div>
+				<div className="table-responsive">
+					<div className="p-3 border-bottom d-flex align-items-center justify-content-between">
+						<div className="d-flex w-100 flex-column flex-md-row justify-content-between align-items-center">
+							<div className="text-muted d-none d-md-block">
+								Listing WireGuard Clients
+							</div>
+							<div className="d-flex flex-wrap gap-2 justify-content-md-end w-100 w-md-auto align-items-center">
+								{/* Server filter dropdown */}
+								<select
+									className="form-select form-select-sm"
+									style={{ width: 200 }}
+									value={selectedServerId}
+									onChange={(e) =>
+										setSelectedServerId(e.target.value === "all" ? "all" : Number(e.target.value))
+									}
+								>
+									<option value="all">All Servers</option>
+									{interfaces?.map((iface) => (
+										<option key={iface.id} value={iface.id}>
+											{iface.name}
+										</option>
+									))}
+								</select>
+								<input
+									type="text"
+									className="form-control form-control-sm"
+									placeholder="Search clients..."
+									value={clientFilter}
+									onChange={(e) => setClientFilter(e.target.value)}
+									style={{ width: 250 }}
+								/>
+								<button
+									type="button"
+									className="btn btn-primary btn-sm"
+									onClick={handleNewClient}
+									id="wg-new-client-btn"
+								>
+									<IconPlus size={16} className="me-1" />
+									New Client
+								</button>
 							</div>
 						</div>
-						<table className="table table-vcenter table-nowrap card-table">
-							<thead>
-								<tr>
-									<th>Status</th>
-									<th>Name</th>
-									<th>Server</th>
-									<th>IP Address</th>
-									<th>Last Handshake</th>
-									<th>Transfer ↓ / ↑</th>
-									<th className="text-end">Actions</th>
-								</tr>
-							</thead>
-							<tbody>
-								{filteredClients?.map((client) => {
-									const isConnected =
-										client.latestHandshakeAt &&
-										Date.now() - new Date(client.latestHandshakeAt).getTime() <
-											3 * 60 * 1000;
-									return (
-										<tr key={client.id}>
-											<td>
-												<span
-													className={`badge ${
-														!client.enabled
-															? "bg-secondary"
-															: isConnected
-																? "bg-success"
-																: "bg-warning"
-													}`}
-												>
-													{!client.enabled
-														? "Disabled"
-														: isConnected
-															? "Connected"
-															: "Idle"}
-												</span>
-											</td>
-											<td className="fw-bold">{client.name}</td>
-											<td>
-												<div className="text-muted">{client.interfaceName}</div>
-											</td>
-											<td>
-												<code>{client.ipv4Address}</code>
-											</td>
-											<td>{timeAgo(client.latestHandshakeAt)}</td>
-											<td>
-												<div className="d-flex flex-column text-muted small">
-													<span>↓ {formatBytes(client.transferRx)}</span>
-													<span>↑ {formatBytes(client.transferTx)}</span>
-												</div>
-											</td>
-											<td className="text-end">
-												<div className="btn-group btn-group-sm">
-													<button
-														type="button"
-														className="btn btn-outline-primary"
-														title="QR Code"
-														onClick={() =>
-															handleQR(client.id, client.name)
-														}
-													>
-														<IconQrcode size={16} />
-													</button>
-													<button
-														type="button"
-														className="btn btn-outline-primary"
-														title="Download Config"
-														onClick={() =>
-															handleDownload(client.id, client.name)
-														}
-													>
-														<IconDownload size={16} />
-													</button>
-													<button
-														type="button"
-														className={`btn ${client.enabled ? "btn-outline-warning" : "btn-outline-success"}`}
-														title={
-															client.enabled ? "Disable" : "Enable"
-														}
-														onClick={() =>
-															handleToggleClient(client.id, client.enabled)
-														}
-													>
-														{client.enabled ? (
-															<IconPlayerPause size={16} />
-														) : (
-															<IconPlayerPlay size={16} />
-														)}
-													</button>
-													<button
-														type="button"
-														className="btn btn-outline-danger"
-														title="Delete"
-														onClick={() =>
-															handleDeleteClient(client.id, client.name)
-														}
-													>
-														<IconTrash size={16} />
-													</button>
-												</div>
-											</td>
-										</tr>
-									);
-								})}
-								{(!filteredClients || filteredClients.length === 0) && (
-									<tr>
-										<td colSpan={7} className="text-center text-muted py-5">
-											{clientFilter
-												? "No clients match your filter"
-												: "No WireGuard clients yet. Click 'New Client' to create one."}
-										</td>
-									</tr>
-								)}
-							</tbody>
-						</table>
 					</div>
-				)}
-
-				{activeTab === "servers" && (
-					<div className="table-responsive">
-						<div className="p-3 border-bottom d-flex align-items-center justify-content-between">
-							<div className="d-flex w-100 flex-column flex-md-row justify-content-between align-items-center">
-								<div className="text-muted d-none d-md-block">
-									Listing WireGuard Servers
-								</div>
-								<div className="d-flex flex-wrap gap-2 justify-content-md-end w-100 w-md-auto align-items-center">
-									<input
-										type="text"
-										className="form-control form-control-sm"
-										placeholder="Search servers..."
-										value={serverFilter}
-										onChange={(e) => setServerFilter(e.target.value)}
-										style={{ width: 250 }}
-									/>
-									<button
-										type="button"
-										className="btn btn-primary btn-sm"
-										onClick={handleNewServer}
-									>
-										<IconPlus size={16} className="me-1" />
-										New Server
-									</button>
-								</div>
-							</div>
-						</div>
-						<table className="table table-vcenter table-nowrap card-table">
-							<thead>
-								<tr>
-									<th>Interface</th>
-									<th>Subnet</th>
-									<th>Port</th>
-									<th>Endpoint Host</th>
-									<th>Isolation</th>
-									<th>Links</th>
-									<th className="text-end">Actions</th>
-								</tr>
-							</thead>
-							<tbody>
-								{filteredInterfaces?.map((iface) => (
-									<tr key={iface.id}>
-										<td className="fw-bold">{iface.name}</td>
+					<table className="table table-vcenter table-nowrap card-table">
+						<thead>
+							<tr>
+								<th>Status</th>
+								<th>Name</th>
+								<th>Server</th>
+								<th>IP Address</th>
+								<th>Last Handshake</th>
+								<th>Transfer ↓ / ↑</th>
+								<th className="text-end">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{filteredClients?.map((client) => {
+								const isConnected =
+									client.latestHandshakeAt &&
+									Date.now() - new Date(client.latestHandshakeAt).getTime() <
+										3 * 60 * 1000;
+								return (
+									<tr key={client.id}>
 										<td>
-											<code>{iface.ipv4Cidr}</code>
+											<span
+												className={`badge ${
+													!client.enabled
+														? "bg-secondary"
+														: isConnected
+															? "bg-success"
+															: "bg-warning"
+												}`}
+											>
+												{!client.enabled
+													? "Disabled"
+													: isConnected
+														? "Connected"
+														: "Idle"}
+											</span>
 										</td>
-										<td>{iface.listenPort}</td>
-										<td className="text-muted">{iface.host || "None"}</td>
+										<td className="fw-bold">{client.name}</td>
 										<td>
-											{iface.isolateClients ? (
-												<span className="badge bg-green text-green-fg">Enabled</span>
-											) : (
-												<span className="badge bg-secondary text-secondary-fg">Disabled</span>
-											)}
+											<div className="text-muted">{client.interfaceName || "—"}</div>
 										</td>
 										<td>
-											<div className="d-flex align-items-center">
-												<span className="badge bg-azure me-2">{iface.linkedServers?.length || 0}</span>
-												{iface.linkedServers?.length > 0 && interfaces && (
-													<span className="text-muted small">
-														({interfaces.filter(i => iface.linkedServers.includes(i.id)).map(i => i.name).join(", ")})
-													</span>
-												)}
+											<code>{client.ipv4Address}</code>
+										</td>
+										<td>{timeAgo(client.latestHandshakeAt)}</td>
+										<td>
+											<div className="d-flex flex-column text-muted small">
+												<span>↓ {formatBytes(client.transferRx)}</span>
+												<span>↑ {formatBytes(client.transferTx)}</span>
 											</div>
 										</td>
 										<td className="text-end">
@@ -395,42 +393,66 @@ function WireGuard() {
 												<button
 													type="button"
 													className="btn btn-outline-primary"
-													title="Linked Servers"
-													onClick={() => handleManageLinks(iface)}
+													title="QR Code"
+													onClick={() =>
+														handleQR(client.id, client.name)
+													}
 												>
-													<IconLink size={16} />
+													<IconQrcode size={16} />
 												</button>
 												<button
 													type="button"
 													className="btn btn-outline-primary"
-													title="Edit Server"
-													onClick={() => handleEditServer(iface)}
+													title="Download Config"
+													onClick={() =>
+														handleDownload(client.id, client.name)
+													}
 												>
-													<IconEdit size={16} />
+													<IconDownload size={16} />
+												</button>
+												<button
+													type="button"
+													className={`btn ${client.enabled ? "btn-outline-warning" : "btn-outline-success"}`}
+													title={
+														client.enabled ? "Disable" : "Enable"
+													}
+													onClick={() =>
+														handleToggleClient(client.id, client.enabled)
+													}
+												>
+													{client.enabled ? (
+														<IconPlayerPause size={16} />
+													) : (
+														<IconPlayerPlay size={16} />
+													)}
 												</button>
 												<button
 													type="button"
 													className="btn btn-outline-danger"
-													title="Delete Server"
-													onClick={() => handleDeleteServer(iface.id, iface.name)}
+													title="Delete"
+													onClick={() =>
+														handleDeleteClient(client.id, client.name)
+													}
 												>
 													<IconTrash size={16} />
 												</button>
 											</div>
 										</td>
 									</tr>
-								))}
-								{(!interfaces || interfaces.length === 0) && (
-									<tr>
-										<td colSpan={7} className="text-center text-muted py-5">
-											No WireGuard servers configured.
-										</td>
-									</tr>
-								)}
-							</tbody>
-						</table>
-					</div>
-				)}
+								);
+							})}
+							{(!filteredClients || filteredClients.length === 0) && (
+								<tr>
+									<td colSpan={7} className="text-center text-muted py-5">
+										{clientFilter || selectedServerId !== "all"
+											? "No clients match your filter"
+											: "No WireGuard clients yet. Click 'New Client' to create one."}
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		</div>
 	);
