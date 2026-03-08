@@ -45,8 +45,6 @@ docker run -d \
   --name npm-wg \
   --cap-add=NET_ADMIN \
   --cap-add=SYS_MODULE \
-  --sysctl net.ipv4.ip_forward=1 \
-  --sysctl net.ipv4.conf.all.src_valid_mark=1 \
   --network host \
   -v npm-wg-data:/data \
   -v npm-wg-letsencrypt:/etc/letsencrypt \
@@ -67,9 +65,6 @@ services:
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
-    sysctls:
-      - net.ipv4.ip_forward=1
-      - net.ipv4.conf.all.src_valid_mark=1
     network_mode: "host"
     volumes:
       - data:/data

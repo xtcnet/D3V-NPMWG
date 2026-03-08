@@ -129,6 +129,22 @@ install_deps() {
 }
 
 # -----------------------------------------------------------
+#  x. Apply sysctls to Host (For WireGuard in Host Network Mode)
+# -----------------------------------------------------------
+apply_sysctls_to_host() {
+    log_step "Applying required sysctl network parameters to host..."
+    sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
+    sysctl -w net.ipv4.conf.all.src_valid_mark=1 >/dev/null 2>&1
+
+    # Persist sysctls if they don't already exist
+    if [ -f /etc/sysctl.conf ]; then
+        grep -q 'net.ipv4.ip_forward=1' /etc/sysctl.conf || echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
+        grep -q 'net.ipv4.conf.all.src_valid_mark=1' /etc/sysctl.conf || echo 'net.ipv4.conf.all.src_valid_mark=1' >> /etc/sysctl.conf
+    fi
+    log_ok "Host network parameters configured."
+}
+
+# -----------------------------------------------------------
 #  x. Generate docker-compose.yml
 # -----------------------------------------------------------
 generate_docker_compose() {
@@ -148,9 +164,6 @@ services:
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
-    sysctls:
-      - net.ipv4.ip_forward=1
-      - net.ipv4.conf.all.src_valid_mark=1
     network_mode: "host"
     volumes:
       - ./data:/data
@@ -207,6 +220,9 @@ do_install() {
     log_step "Creating ${INSTALL_DIR}..."
     mkdir -p "$INSTALL_DIR"
     log_ok "Directory created."
+
+    # --- Apply Sysctls ---
+    apply_sysctls_to_host
 
     # --- Write docker-compose.yml ---
     generate_docker_compose "$wg_host"
@@ -376,6 +392,7 @@ do_update() {
         log_warn "Could not extract WG_HOST. Using ${current_wg_host}."
     fi
 
+    apply_sysctls_to_host
     generate_docker_compose "$current_wg_host"
 
     log_step "Pulling latest image..."
