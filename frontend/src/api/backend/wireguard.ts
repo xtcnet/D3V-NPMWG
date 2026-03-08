@@ -79,3 +79,7 @@ export async function getWgClientConfig(id: number): Promise<string> {
 export function downloadWgConfig(id: number, name: string) {
 	return api.download({ url: `/wireguard/client/${id}/configuration` }, `${name}.conf`);
 }
+
+export function downloadWgConfigZip(id: number, name: string) {
+	return api.download({ url: `/wireguard/client/${id}/configuration.zip` }, `${name}.zip`);
+}

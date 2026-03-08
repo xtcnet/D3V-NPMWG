@@ -9,10 +9,11 @@ import {
 	IconServer,
 	IconEdit,
 	IconLink,
+	IconZip,
 } from "@tabler/icons-react";
 import EasyModal from "ez-modal-react";
 import { useState } from "react";
-import { downloadWgConfig } from "src/api/backend/wireguard";
+import { downloadWgConfig, downloadWgConfigZip } from "src/api/backend/wireguard";
 import { Loading } from "src/components";
 import {
 	useWgClients,
@@ -152,6 +153,11 @@ function WireGuard() {
 	const handleDownload = (id: number, name: string) => {
 		const cleanName = name.replace(/[^a-zA-Z0-9_.-]/g, "-").substring(0, 32);
 		downloadWgConfig(id, cleanName);
+	};
+
+	const handleDownloadZip = (id: number, name: string) => {
+		const cleanName = name.replace(/[^a-zA-Z0-9_.-]/g, "-").substring(0, 32);
+		downloadWgConfigZip(id, cleanName);
 	};
 
 	return (
@@ -410,6 +416,16 @@ function WireGuard() {
 													}
 												>
 													<IconDownload size={16} />
+												</button>
+												<button
+													type="button"
+													className="btn btn-outline-primary"
+													title="Download Config + QR (ZIP)"
+													onClick={() =>
+														handleDownloadZip(client.id, client.name)
+													}
+												>
+													<IconZip size={16} />
 												</button>
 												<button
 													type="button"

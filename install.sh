@@ -139,6 +139,16 @@ generate_docker_compose() {
     fi
 
     log_step "Generating docker-compose.yml..."
+    
+    local custom_ports_block=""
+    if [ -f ".custom_ports" ]; then
+        while IFS= read -r port_mapping; do
+            # Ignore empty lines or comments
+            [[ -z "$port_mapping" || "$port_mapping" =~ ^# ]] && continue
+            custom_ports_block+="      - \"${port_mapping}\"\n"
+        done < ".custom_ports"
+    fi
+
     cat > "$COMPOSE_FILE" <<YAML
 services:
   d3v-npmwg:
@@ -156,7 +166,7 @@ services:
       - "81:81"       # Admin UI
       - "443:443"     # HTTPS
       - "51820-51830:51820-51830/udp"  # WireGuard Multi-Server Range
-    volumes:
+$(echo -e "$custom_ports_block" | sed '/^$/d')    volumes:
       - ./data:/data
       - ./letsencrypt:/etc/letsencrypt
       - ./wireguard:/etc/wireguard
@@ -398,6 +408,62 @@ do_update() {
 # -----------------------------------------------------------
 #  7. Toggle Port 81 (Admin UI)
 # -----------------------------------------------------------
+#  x. Custom Stream Ports Manager
+# -----------------------------------------------------------
+do_manage_ports() {
+    require_root
+    echo ""
+    log_step "TCP/UDP Stream Ports Manager"
+    echo "If you created a Stream in Nginx Proxy Manager (e.g., listening on port 10000),"
+    echo "you must expose that port down to the Docker container."
+    echo ""
+    
+    local custom_ports_file=".custom_ports"
+    touch "$custom_ports_file"
+    
+    echo "Current custom exposed ports:"
+    if [ -s "$custom_ports_file" ]; then
+        cat -n "$custom_ports_file"
+    else
+        echo "  (None)"
+    fi
+    echo ""
+    
+    read -rp "$(echo -e "${CYAN}[?]${NC} Enter new port mapping (e.g. 10000:10000) or 'clear' to remove all: ")" new_port
+    
+    if [[ "$new_port" == "clear" ]]; then
+        > "$custom_ports_file"
+        log_ok "All custom ports cleared."
+    elif [[ -n "$new_port" ]]; then
+        echo "$new_port" >> "$custom_ports_file"
+        log_ok "Port $new_port added."
+    else
+        log_warn "No changes made."
+        return
+    fi
+    
+    log_step "Regenerating docker-compose.yml and restarting container..."
+    
+    local dc
+    dc=$(get_compose_cmd)
+    
+    local current_wg_host=""
+    if [ -f "docker-compose.yml" ]; then
+        current_wg_host=$(grep -E 'WG_HOST:' docker-compose.yml | awk -F'"' '{print $2}')
+    fi
+    if [ -z "$current_wg_host" ]; then
+        current_wg_host=$(detect_public_ip)
+    fi
+
+    generate_docker_compose "$current_wg_host"
+    
+    $dc up -d
+    log_ok "Container updated with new port configurations."
+}
+
+# -----------------------------------------------------------
+#  7. Toggle Port 81 (Admin UI)
+# -----------------------------------------------------------
 do_toggle_port_81() {
     require_root
     echo ""
@@ -435,10 +501,11 @@ show_menu() {
         echo "  3) Uninstall D3V-NPMWG + Docker (Purge)"
         echo "  4) Reset Admin Password"
         echo "  5) Update D3V-NPMWG"
-        echo "  6) Toggle Admin Port 81 (Block/Unblock)"
-        echo "  7) Exit"
+        echo "  6) Manage Custom Stream Ports"
+        echo "  7) Toggle Admin Port 81 (Block/Unblock)"
+        echo "  8) Exit"
         separator
-        read -rp "  Select [1-7]: " choice
+        read -rp "  Select [1-8]: " choice
         echo ""
         case "$choice" in
             1) do_install ;;
@@ -446,8 +513,9 @@ show_menu() {
             3) do_purge ;;
             4) do_reset_password ;;
             5) do_update ;;
-            6) do_toggle_port_81 ;;
-            7) echo "Bye!"; exit 0 ;;
+            6) do_manage_ports ;;
+            7) do_toggle_port_81 ;;
+            8) echo "Bye!"; exit 0 ;;
             *) log_err "Invalid option." ;;
         esac
     done
@@ -462,6 +530,7 @@ show_help() {
     echo "  purge        Remove D3V-NPMWG AND Docker"
     echo "  reset        Reset web admin password"
     echo "  update       Pull latest image and restart"
+    echo "  manage-ports Add or remove custom exposed Stream TCP/UDP ports"
     echo "  toggle-port  Block or unblock external access to Admin UI (Port 81) using iptables"
     echo "  help         Show this help"
     echo ""
@@ -480,6 +549,7 @@ else
         purge)       do_purge ;;
         reset)       do_reset_password ;;
         update)      do_update ;;
+        manage-ports) do_manage_ports ;;
         toggle-port) do_toggle_port_81 ;;
         help|-h|--help) show_help ;;
         *)

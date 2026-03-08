@@ -1,4 +1,5 @@
 import express from "express";
+import archiver from "archiver";
 import internalWireguard from "../internal/wireguard.js";
 import internalAuditLog from "../internal/audit-log.js";
 import jwtdecode from "../lib/express/jwt-decode.js";
@@ -269,6 +270,38 @@ router.get("/client/:id/qrcode.svg", async (req, res, next) => {
 		const svg = await internalWireguard.getClientQRCode(knex, req.params.id);
 		res.set("Content-Type", "image/svg+xml");
 		res.status(200).send(svg);
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
+ * GET /api/wireguard/client/:id/configuration.zip
+ * Download WireGuard client configuration as a ZIP archive
+ */
+router.get("/client/:id/configuration.zip", async (req, res, next) => {
+	try {
+		const knex = db();
+		const client = await knex("wg_client").where("id", req.params.id).first();
+		if (!client) {
+			return res.status(404).json({ error: { message: "Client not found" } });
+		}
+		
+		const configStr = await internalWireguard.getClientConfiguration(knex, req.params.id);
+		const svgStr = await internalWireguard.getClientQRCode(knex, req.params.id);
+		const safeName = client.name.replace(/[^a-zA-Z0-9_.-]/g, "-").substring(0, 32);
+
+		res.set("Content-Disposition", `attachment; filename="${safeName}.zip"`);
+		res.set("Content-Type", "application/zip");
+
+		const archive = archiver("zip", { zlib: { level: 9 } });
+		archive.on("error", (err) => next(err));
+		archive.pipe(res);
+
+		archive.append(configStr, { name: `${safeName}.conf` });
+		archive.append(svgStr, { name: `${safeName}-qrcode.svg` });
+		
+		await archive.finalize();
 	} catch (err) {
 		next(err);
 	}
