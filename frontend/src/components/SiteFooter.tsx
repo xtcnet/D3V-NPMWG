@@ -1,17 +1,6 @@
-import { useCheckVersion, useHealth } from "src/hooks";
 import { T } from "src/locale";
 
 export function SiteFooter() {
-	const health = useHealth();
-	const { data: versionData } = useCheckVersion();
-
-	const getVersion = () => {
-		if (!health.data) {
-			return "";
-		}
-		const v = health.data.version;
-		return `v${v.major}.${v.minor}.${v.revision}`;
-	};
 
 	return (
 		<footer className="footer d-print-none py-3">
