@@ -87,86 +87,100 @@ const internalWireguard = {
 	},
 
 	/**
-	 * Save WireGuard config to /etc/wireguard/wg0.conf and sync
+	 * Save WireGuard config to /etc/wireguard/wgX.conf and sync
 	 */
 	async saveConfig(knex) {
-		const iface = await this.getOrCreateInterface(knex);
+		await this.getOrCreateInterface(knex); // Ensure at least wg0 exists
+		
+		const ifaces = await knex("wg_interface").select("*");
 		const clients = await knex("wg_client").where("enabled", true);
 
-		// Generate server interface section
-		const parsed = wgHelpers.parseCIDR(iface.ipv4_cidr);
-		const serverAddress = `${parsed.firstHost}/${parsed.prefix}`;
+		for (const iface of ifaces) {
+			// 1. Render IPTables Rules dynamically for this interface
+			const { postUp, postDown } = await this.renderIptablesRules(knex, iface);
 
-		let configContent = wgHelpers.generateServerInterface({
-			privateKey: iface.private_key,
-			address: serverAddress,
-			listenPort: iface.listen_port,
-			mtu: iface.mtu,
-			dns: null, // DNS is for clients, not server
-			postUp: iface.post_up,
-			postDown: iface.post_down,
-		});
+			// 2. Generate server interface section
+			const parsed = wgHelpers.parseCIDR(iface.ipv4_cidr);
+			const serverAddress = `${parsed.firstHost}/${parsed.prefix}`;
 
-		// Generate peer sections for each enabled client
-		for (const client of clients) {
-			configContent += "\n\n" + wgHelpers.generateServerPeer({
-				publicKey: client.public_key,
-				preSharedKey: client.pre_shared_key,
-				allowedIps: `${client.ipv4_address}/32`,
+			let configContent = wgHelpers.generateServerInterface({
+				privateKey: iface.private_key,
+				address: serverAddress,
+				listenPort: iface.listen_port,
+				mtu: iface.mtu,
+				dns: null, // DNS is for clients, not server
+				postUp: postUp,
+				postDown: postDown,
 			});
-		}
 
-		configContent += "\n";
+			// 3. Generate peer sections for each enabled client ON THIS SERVER
+			const ifaceClients = clients.filter(c => c.interface_id === iface.id);
+			for (const client of ifaceClients) {
+				configContent += "\n\n" + wgHelpers.generateServerPeer({
+					publicKey: client.public_key,
+					preSharedKey: client.pre_shared_key,
+					allowedIps: `${client.ipv4_address}/32`,
+				});
+			}
 
-		// Write config file
-		const configPath = `${WG_CONFIG_DIR}/${iface.name}.conf`;
-		fs.writeFileSync(configPath, configContent, { mode: 0o600 });
-		logger.info(`WireGuard config saved to ${configPath}`);
+			configContent += "\n";
 
-		// Sync config
-		try {
-			await wgHelpers.wgSync(iface.name);
-			logger.info("WireGuard config synced");
-		} catch (err) {
-			logger.warn("WireGuard sync failed, may need full restart:", err.message);
+			// 4. Write config file
+			const configPath = `${WG_CONFIG_DIR}/${iface.name}.conf`;
+			fs.writeFileSync(configPath, configContent, { mode: 0o600 });
+			logger.info(`WireGuard config saved to ${configPath}`);
+
+			// 5. Sync config
+			try {
+				await wgHelpers.wgSync(iface.name);
+				logger.info(`WireGuard config synced for ${iface.name}`);
+			} catch (err) {
+				logger.warn(`WireGuard sync failed for ${iface.name}, may need full restart:`, err.message);
+			}
 		}
 	},
 
 	/**
-	 * Start WireGuard interface
+	 * Start WireGuard interfaces
 	 */
 	async startup(knex) {
 		try {
-			const iface = await this.getOrCreateInterface(knex);
+			await this.getOrCreateInterface(knex); // ensure at least wg0
 
 			// Ensure config dir exists
 			if (!fs.existsSync(WG_CONFIG_DIR)) {
 				fs.mkdirSync(WG_CONFIG_DIR, { recursive: true });
 			}
 
-			// Save config first
+			// Save configs first (generates .conf files dynamically for all wg_interfaces)
 			await this.saveConfig(knex);
 
-			// Bring down if already up, then up
-			try {
-				await wgHelpers.wgDown(iface.name);
-			} catch (_) {
-				// Ignore if not up
-			}
+			// Bring down/up all interfaces sequentially
+			const ifaces = await knex("wg_interface").select("name", "listen_port");
+			for (const iface of ifaces) {
+				try {
+					await wgHelpers.wgDown(iface.name);
+				} catch (_) {
+					// Ignore if not up
+				}
 
-			await wgHelpers.wgUp(iface.name);
-			logger.info(`WireGuard interface ${iface.name} started on port ${iface.listen_port}`);
+				try {
+					await wgHelpers.wgUp(iface.name);
+					logger.info(`WireGuard interface ${iface.name} started on port ${iface.listen_port}`);
+				} catch (err) {
+					logger.error(`WireGuard startup failed for ${iface.name}:`, err.message);
+				}
+			}
 
 			// Start cron job for expiration
 			this.startCronJob(knex);
 		} catch (err) {
-			logger.error("WireGuard startup failed:", err.message);
-			logger.warn("WireGuard features will be unavailable. Ensure the host supports WireGuard kernel module.");
+			logger.error("WireGuard startup failed overall:", err.message);
 		}
 	},
 
 	/**
-	 * Shutdown WireGuard interface
+	 * Shutdown WireGuard interfaces
 	 */
 	async shutdown(knex) {
 		if (cronTimer) {
@@ -174,26 +188,35 @@ const internalWireguard = {
 			cronTimer = null;
 		}
 		try {
-			const iface = await knex("wg_interface").first();
-			if (iface) {
-				await wgHelpers.wgDown(iface.name);
-				logger.info(`WireGuard interface ${iface.name} stopped`);
+			const ifaces = await knex("wg_interface").select("name");
+			for (const iface of ifaces) {
+				try {
+					await wgHelpers.wgDown(iface.name);
+					logger.info(`WireGuard interface ${iface.name} stopped`);
+				} catch (err) {
+					logger.warn(`WireGuard shutdown warning for ${iface.name}:`, err.message);
+				}
 			}
 		} catch (err) {
-			logger.warn("WireGuard shutdown warning:", err.message);
+			logger.error("WireGuard shutdown failed querying DB:", err.message);
 		}
 	},
 
 	/**
-	 * Get all clients with live status
+	 * Get all clients with live status and interface name correlation
 	 */
 	async getClients(knex) {
-		const iface = await this.getOrCreateInterface(knex);
-		const dbClients = await knex("wg_client").orderBy("created_on", "desc");
+		await this.getOrCreateInterface(knex); // Ensure structure exists
+		
+		const dbClients = await knex("wg_client")
+			.join("wg_interface", "wg_client.interface_id", "=", "wg_interface.id")
+			.select("wg_client.*", "wg_interface.name as interface_name")
+			.orderBy("wg_client.created_on", "desc");
 
 		const clients = dbClients.map((c) => ({
 			id: c.id,
 			name: c.name,
+			interfaceName: c.interface_name,
 			enabled: c.enabled === 1 || c.enabled === true,
 			ipv4_address: c.ipv4_address,
 			public_key: c.public_key,
@@ -209,20 +232,23 @@ const internalWireguard = {
 			transfer_tx: 0,
 		}));
 
-		// Get live WireGuard status
-		try {
-			const dump = await wgHelpers.wgDump(iface.name);
-			for (const peer of dump) {
-				const client = clients.find((c) => c.public_key === peer.publicKey);
-				if (client) {
-					client.latest_handshake_at = peer.latestHandshakeAt;
-					client.endpoint = peer.endpoint;
-					client.transfer_rx = peer.transferRx;
-					client.transfer_tx = peer.transferTx;
+		// Get live WireGuard status from ALL interfaces
+		const ifaces = await knex("wg_interface").select("name");
+		for (const iface of ifaces) {
+			try {
+				const dump = await wgHelpers.wgDump(iface.name);
+				for (const peer of dump) {
+					const client = clients.find((c) => c.public_key === peer.publicKey);
+					if (client) {
+						client.latest_handshake_at = peer.latestHandshakeAt;
+						client.endpoint = peer.endpoint;
+						client.transfer_rx = peer.transferRx;
+						client.transfer_tx = peer.transferTx;
+					}
 				}
+			} catch (_) {
+				// WireGuard might be off or particular interface fails
 			}
-		} catch (_) {
-			// WireGuard may not be running
 		}
 
 		return clients;
@@ -329,10 +355,14 @@ const internalWireguard = {
 	 * Get client configuration file content
 	 */
 	async getClientConfiguration(knex, clientId) {
-		const iface = await this.getOrCreateInterface(knex);
 		const client = await knex("wg_client").where("id", clientId).first();
 		if (!client) {
 			throw new Error("Client not found");
+		}
+		
+		const iface = await knex("wg_interface").where("id", client.interface_id).first();
+		if (!iface) {
+			throw new Error("Interface not found for this client");
 		}
 
 		const endpoint = `${iface.host || "YOUR_SERVER_IP"}:${iface.listen_port}`;

@@ -1,5 +1,7 @@
 import express from "express";
 import internalWireguard from "../internal/wireguard.js";
+import internalAuditLog from "../internal/audit-log.js";
+import jwtdecode from "../lib/express/jwt-decode.js";
 import db from "../db.js";
 
 const router = express.Router({
@@ -7,6 +9,9 @@ const router = express.Router({
 	strict: true,
 	mergeParams: true,
 });
+
+// Protect all WireGuard routes
+router.use(jwtdecode());
 
 /**
  * GET /api/wireguard
@@ -30,6 +35,12 @@ router.post("/", async (req, res, next) => {
 	try {
 		const knex = db();
 		const iface = await internalWireguard.createInterface(knex, req.body);
+		await internalAuditLog.add(res.locals.access, {
+			action: "created",
+			object_type: "wireguard-server",
+			object_id: iface.id,
+			meta: req.body,
+		});
 		res.status(201).json(iface);
 	} catch (err) {
 		next(err);
@@ -44,6 +55,12 @@ router.put("/:id", async (req, res, next) => {
 	try {
 		const knex = db();
 		const iface = await internalWireguard.updateInterface(knex, req.params.id, req.body);
+		await internalAuditLog.add(res.locals.access, {
+			action: "updated",
+			object_type: "wireguard-server",
+			object_id: iface.id,
+			meta: req.body,
+		});
 		res.status(200).json(iface);
 	} catch (err) {
 		next(err);
@@ -58,6 +75,12 @@ router.delete("/:id", async (req, res, next) => {
 	try {
 		const knex = db();
 		const result = await internalWireguard.deleteInterface(knex, req.params.id);
+		await internalAuditLog.add(res.locals.access, {
+			action: "deleted",
+			object_type: "wireguard-server",
+			object_id: req.params.id,
+			meta: {},
+		});
 		res.status(200).json(result);
 	} catch (err) {
 		next(err);
@@ -72,6 +95,12 @@ router.post("/:id/links", async (req, res, next) => {
 	try {
 		const knex = db();
 		const result = await internalWireguard.updateInterfaceLinks(knex, req.params.id, req.body.linked_servers || []);
+		await internalAuditLog.add(res.locals.access, {
+			action: "updated",
+			object_type: "wireguard-server-links",
+			object_id: req.params.id,
+			meta: req.body,
+		});
 		res.status(200).json(result);
 	} catch (err) {
 		next(err);
@@ -100,6 +129,12 @@ router.post("/client", async (req, res, next) => {
 	try {
 		const knex = db();
 		const client = await internalWireguard.createClient(knex, req.body);
+		await internalAuditLog.add(res.locals.access, {
+			action: "created",
+			object_type: "wireguard-client",
+			object_id: client.id,
+			meta: req.body,
+		});
 		res.status(201).json(client);
 	} catch (err) {
 		next(err);
@@ -131,6 +166,12 @@ router.put("/client/:id", async (req, res, next) => {
 	try {
 		const knex = db();
 		const client = await internalWireguard.updateClient(knex, req.params.id, req.body);
+		await internalAuditLog.add(res.locals.access, {
+			action: "updated",
+			object_type: "wireguard-client",
+			object_id: client.id,
+			meta: req.body,
+		});
 		res.status(200).json(client);
 	} catch (err) {
 		next(err);
@@ -145,6 +186,12 @@ router.delete("/client/:id", async (req, res, next) => {
 	try {
 		const knex = db();
 		const result = await internalWireguard.deleteClient(knex, req.params.id);
+		await internalAuditLog.add(res.locals.access, {
+			action: "deleted",
+			object_type: "wireguard-client",
+			object_id: req.params.id,
+			meta: {},
+		});
 		res.status(200).json(result);
 	} catch (err) {
 		next(err);
@@ -159,6 +206,12 @@ router.post("/client/:id/enable", async (req, res, next) => {
 	try {
 		const knex = db();
 		const client = await internalWireguard.toggleClient(knex, req.params.id, true);
+		await internalAuditLog.add(res.locals.access, {
+			action: "enabled",
+			object_type: "wireguard-client",
+			object_id: client.id,
+			meta: {},
+		});
 		res.status(200).json(client);
 	} catch (err) {
 		next(err);
@@ -173,6 +226,12 @@ router.post("/client/:id/disable", async (req, res, next) => {
 	try {
 		const knex = db();
 		const client = await internalWireguard.toggleClient(knex, req.params.id, false);
+		await internalAuditLog.add(res.locals.access, {
+			action: "disabled",
+			object_type: "wireguard-client",
+			object_id: client.id,
+			meta: {},
+		});
 		res.status(200).json(client);
 	} catch (err) {
 		next(err);
