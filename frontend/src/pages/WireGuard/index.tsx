@@ -80,7 +80,7 @@ function WireGuard() {
 	const filteredClients = clients?.filter((c: any) => {
 		// Filter by selected server
 		const cInterfaceId = c.interfaceId || c.interface_id;
-		if (selectedServerId !== "all" && cInterfaceId !== selectedServerId) {
+		if (selectedServerId !== "all" && Number(cInterfaceId) !== selectedServerId) {
 			return false;
 		}
 		// Filter by search text

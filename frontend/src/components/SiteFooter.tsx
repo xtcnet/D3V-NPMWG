@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
-import { IconCpu, IconServer, IconArrowsDownUp } from "@tabler/icons-react";
+import { IconCpu, IconServer, IconArrowsDownUp, IconDatabase } from "@tabler/icons-react";
 import * as api from "../api/backend/base";
 
 export function SiteFooter() {
 	const [sysStats, setSysStats] = useState({
 		cpu: 0,
 		memory: 0,
+		memoryTotal: 0,
+		memoryActive: 0,
+		storage: 0,
+		storageTotal: 0,
+		storageUsed: 0,
 		networkRx: "0.00",
 		networkTx: "0.00"
 	});
@@ -35,6 +40,9 @@ export function SiteFooter() {
 		};
 	}, []);
 
+	// Convert bytes to GB string
+	const formatGB = (bytes: number) => (bytes / 1024 / 1024 / 1024).toFixed(1);
+
 	return (
 		<footer className="footer d-print-none py-3">
 			<div className="container-xl">
@@ -44,9 +52,13 @@ export function SiteFooter() {
 							<IconCpu size={16} />
 							<span>{sysStats.cpu}%</span>
 						</div>
-						<div title="Memory Usage" className="d-flex align-items-center gap-1">
+						<div title={`Memory Usage (${formatGB(sysStats.memoryActive)}GB / ${formatGB(sysStats.memoryTotal)}GB)`} className="d-flex align-items-center gap-1">
 							<IconServer size={16} />
-							<span>{sysStats.memory}%</span>
+							<span>{sysStats.memory}% of {Math.round(sysStats.memoryTotal / 1024 / 1024 / 1024)}GB</span>
+						</div>
+						<div title={`Storage Usage (${formatGB(sysStats.storageUsed)}GB / ${formatGB(sysStats.storageTotal)}GB)`} className="d-flex align-items-center gap-1">
+							<IconDatabase size={16} />
+							<span>Free {formatGB(sysStats.storageTotal - sysStats.storageUsed)}GB</span>
 						</div>
 						<div title="Network Bandwidth" className="d-flex align-items-center gap-1">
 							<IconArrowsDownUp size={16} />
