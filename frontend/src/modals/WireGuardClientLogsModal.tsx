@@ -23,20 +23,34 @@ const WireGuardClientLogsModal = EasyModal.create(({ clientId, clientName }: Pro
 		modal.hide();
 	};
 
-	const formatDate = (dateString: string) => {
+	const formatDate = (dateValue: string | number | undefined) => {
+		if (!dateValue) return "Unknown Date";
 		try {
-			// Ensure UTC parsing from raw SQLite timestamp
-			const d = new Date(dateString.endsWith('Z') ? dateString : dateString + 'Z');
+			const dateString = String(dateValue);
+			let d: Date;
+			// If it's pure numbers, it might be an epoch timestamp (ms)
+			if (/^\d+$/.test(dateString) && Number(dateString) > 1000000000) {
+				d = new Date(Number(dateString));
+			} else if (dateString.includes("-") && !dateString.endsWith("Z")) {
+				// Ensure UTC parsing from raw SQLite timestamp
+				d = new Date(dateString + "Z");
+			} else {
+				d = new Date(dateString);
+			}
 			return isNaN(d.getTime()) ? dateString : d.toLocaleString();
 		} catch {
-			return dateString;
+			return String(dateValue);
 		}
 	};
 
 	const parseLogMeta = (metaString: string | any) => {
 		try {
 			const meta = typeof metaString === 'string' ? JSON.parse(metaString) : metaString;
-			return meta?.message || typeof meta === 'string' ? meta : JSON.stringify(meta);
+			if (meta && typeof meta === 'object') {
+				// If it's an object with a message, return the message string, else stringify the whole object
+				return meta.message ? String(meta.message) : JSON.stringify(meta);
+			}
+			return typeof meta === 'string' ? meta : JSON.stringify(meta);
 		} catch {
 			return String(metaString);
 		}
@@ -85,7 +99,7 @@ const WireGuardClientLogsModal = EasyModal.create(({ clientId, clientName }: Pro
 									logs.map((log: any) => (
 										<tr key={log.id}>
 											<td className="text-muted small">
-												{formatDate(log.created_on)}
+												{formatDate(log.created_on || log.createdOn)}
 											</td>
 											<td>{getActionBadge(log.action)}</td>
 											<td className="small text-muted text-wrap">
