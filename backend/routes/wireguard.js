@@ -21,7 +21,8 @@ router.use(jwtdecode());
 router.get("/", async (_req, res, next) => {
 	try {
 		const knex = db();
-		const ifaces = await internalWireguard.getInterfacesInfo(knex);
+		const access = res.locals.access;
+		const ifaces = await internalWireguard.getInterfacesInfo(knex, access);
 		res.status(200).json(ifaces);
 	} catch (err) {
 		next(err);
@@ -35,8 +36,9 @@ router.get("/", async (_req, res, next) => {
 router.post("/", async (req, res, next) => {
 	try {
 		const knex = db();
-		const iface = await internalWireguard.createInterface(knex, req.body);
-		await internalAuditLog.add(res.locals.access, {
+		const access = res.locals.access;
+		const iface = await internalWireguard.createInterface(knex, req.body, access);
+		await internalAuditLog.add(access, {
 			action: "created",
 			object_type: "wireguard-server",
 			object_id: iface.id,
@@ -55,8 +57,9 @@ router.post("/", async (req, res, next) => {
 router.put("/:id", async (req, res, next) => {
 	try {
 		const knex = db();
-		const iface = await internalWireguard.updateInterface(knex, req.params.id, req.body);
-		await internalAuditLog.add(res.locals.access, {
+		const access = res.locals.access;
+		const iface = await internalWireguard.updateInterface(knex, req.params.id, req.body, access);
+		await internalAuditLog.add(access, {
 			action: "updated",
 			object_type: "wireguard-server",
 			object_id: iface.id,
@@ -75,8 +78,9 @@ router.put("/:id", async (req, res, next) => {
 router.delete("/:id", async (req, res, next) => {
 	try {
 		const knex = db();
-		const result = await internalWireguard.deleteInterface(knex, req.params.id);
-		await internalAuditLog.add(res.locals.access, {
+		const access = res.locals.access;
+		const result = await internalWireguard.deleteInterface(knex, req.params.id, access);
+		await internalAuditLog.add(access, {
 			action: "deleted",
 			object_type: "wireguard-server",
 			object_id: req.params.id,
@@ -95,8 +99,9 @@ router.delete("/:id", async (req, res, next) => {
 router.post("/:id/links", async (req, res, next) => {
 	try {
 		const knex = db();
-		const result = await internalWireguard.updateInterfaceLinks(knex, req.params.id, req.body.linked_servers || []);
-		await internalAuditLog.add(res.locals.access, {
+		const access = res.locals.access;
+		const result = await internalWireguard.updateInterfaceLinks(knex, req.params.id, req.body.linked_servers || [], access);
+		await internalAuditLog.add(access, {
 			action: "updated",
 			object_type: "wireguard-server-links",
 			object_id: req.params.id,
@@ -115,7 +120,8 @@ router.post("/:id/links", async (req, res, next) => {
 router.get("/client", async (_req, res, next) => {
 	try {
 		const knex = db();
-		const clients = await internalWireguard.getClients(knex);
+		const access = res.locals.access;
+		const clients = await internalWireguard.getClients(knex, access);
 		res.status(200).json(clients);
 	} catch (err) {
 		next(err);
@@ -129,8 +135,9 @@ router.get("/client", async (_req, res, next) => {
 router.post("/client", async (req, res, next) => {
 	try {
 		const knex = db();
-		const client = await internalWireguard.createClient(knex, req.body);
-		await internalAuditLog.add(res.locals.access, {
+		const access = res.locals.access;
+		const client = await internalWireguard.createClient(knex, req.body, access);
+		await internalAuditLog.add(access, {
 			action: "created",
 			object_type: "wireguard-client",
 			object_id: client.id,
@@ -149,7 +156,12 @@ router.post("/client", async (req, res, next) => {
 router.get("/client/:id", async (req, res, next) => {
 	try {
 		const knex = db();
-		const client = await knex("wg_client").where("id", req.params.id).first();
+		const access = res.locals.access;
+		const query = knex("wg_client").where("id", req.params.id);
+		if (!access.token.hasScope("admin")) {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
 		if (!client) {
 			return res.status(404).json({ error: { message: "Client not found" } });
 		}
@@ -166,8 +178,9 @@ router.get("/client/:id", async (req, res, next) => {
 router.put("/client/:id", async (req, res, next) => {
 	try {
 		const knex = db();
-		const client = await internalWireguard.updateClient(knex, req.params.id, req.body);
-		await internalAuditLog.add(res.locals.access, {
+		const access = res.locals.access;
+		const client = await internalWireguard.updateClient(knex, req.params.id, req.body, access);
+		await internalAuditLog.add(access, {
 			action: "updated",
 			object_type: "wireguard-client",
 			object_id: client.id,
@@ -186,8 +199,9 @@ router.put("/client/:id", async (req, res, next) => {
 router.delete("/client/:id", async (req, res, next) => {
 	try {
 		const knex = db();
-		const result = await internalWireguard.deleteClient(knex, req.params.id);
-		await internalAuditLog.add(res.locals.access, {
+		const access = res.locals.access;
+		const result = await internalWireguard.deleteClient(knex, req.params.id, access);
+		await internalAuditLog.add(access, {
 			action: "deleted",
 			object_type: "wireguard-client",
 			object_id: req.params.id,
@@ -206,8 +220,9 @@ router.delete("/client/:id", async (req, res, next) => {
 router.post("/client/:id/enable", async (req, res, next) => {
 	try {
 		const knex = db();
-		const client = await internalWireguard.toggleClient(knex, req.params.id, true);
-		await internalAuditLog.add(res.locals.access, {
+		const access = res.locals.access;
+		const client = await internalWireguard.toggleClient(knex, req.params.id, true, access);
+		await internalAuditLog.add(access, {
 			action: "enabled",
 			object_type: "wireguard-client",
 			object_id: client.id,
@@ -226,8 +241,9 @@ router.post("/client/:id/enable", async (req, res, next) => {
 router.post("/client/:id/disable", async (req, res, next) => {
 	try {
 		const knex = db();
-		const client = await internalWireguard.toggleClient(knex, req.params.id, false);
-		await internalAuditLog.add(res.locals.access, {
+		const access = res.locals.access;
+		const client = await internalWireguard.toggleClient(knex, req.params.id, false, access);
+		await internalAuditLog.add(access, {
 			action: "disabled",
 			object_type: "wireguard-client",
 			object_id: client.id,
@@ -246,7 +262,12 @@ router.post("/client/:id/disable", async (req, res, next) => {
 router.get("/client/:id/configuration", async (req, res, next) => {
 	try {
 		const knex = db();
-		const client = await knex("wg_client").where("id", req.params.id).first();
+		const access = res.locals.access;
+		const query = knex("wg_client").where("id", req.params.id);
+		if (!access.token.hasScope("admin")) {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
 		if (!client) {
 			return res.status(404).json({ error: { message: "Client not found" } });
 		}
@@ -267,6 +288,15 @@ router.get("/client/:id/configuration", async (req, res, next) => {
 router.get("/client/:id/qrcode.svg", async (req, res, next) => {
 	try {
 		const knex = db();
+		const access = res.locals.access;
+		const query = knex("wg_client").where("id", req.params.id);
+		if (!access.token.hasScope("admin")) {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
+		if (!client) {
+			return res.status(404).json({ error: { message: "Client not found" } });
+		}
 		const svg = await internalWireguard.getClientQRCode(knex, req.params.id);
 		res.set("Content-Type", "image/svg+xml");
 		res.status(200).send(svg);
@@ -282,7 +312,12 @@ router.get("/client/:id/qrcode.svg", async (req, res, next) => {
 router.get("/client/:id/configuration.zip", async (req, res, next) => {
 	try {
 		const knex = db();
-		const client = await knex("wg_client").where("id", req.params.id).first();
+		const access = res.locals.access;
+		const query = knex("wg_client").where("id", req.params.id);
+		if (!access.token.hasScope("admin")) {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
 		if (!client) {
 			return res.status(404).json({ error: { message: "Client not found" } });
 		}

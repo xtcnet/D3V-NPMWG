@@ -205,13 +205,20 @@ const internalWireguard = {
 	/**
 	 * Get all clients with live status and interface name correlation
 	 */
-	async getClients(knex) {
+	async getClients(knex, access) {
 		await this.getOrCreateInterface(knex); // Ensure structure exists
 		
-		const dbClients = await knex("wg_client")
+		const query = knex("wg_client")
 			.join("wg_interface", "wg_client.interface_id", "=", "wg_interface.id")
 			.select("wg_client.*", "wg_interface.name as interface_name")
 			.orderBy("wg_client.created_on", "desc");
+
+		// Filter by owner if not admin
+		if (access && !access.token.hasScope("admin")) {
+			query.andWhere("wg_client.owner_user_id", access.token.getUserId(1));
+		}
+
+		const dbClients = await query;
 
 		const clients = dbClients.map((c) => ({
 			id: c.id,
@@ -258,7 +265,7 @@ const internalWireguard = {
 	/**
 	 * Create a new WireGuard client
 	 */
-	async createClient(knex, data) {
+	async createClient(knex, data, access) {
 		const iface = data.interface_id 
 			? await knex("wg_interface").where("id", data.interface_id).first()
 			: await this.getOrCreateInterface(knex);
@@ -284,6 +291,7 @@ const internalWireguard = {
 			persistent_keepalive: data.persistent_keepalive || WG_DEFAULT_PERSISTENT_KEEPALIVE,
 			expires_at: data.expires_at || null,
 			interface_id: iface.id,
+			owner_user_id: access ? access.token.getUserId(1) : 1,
 			created_on: knex.fn.now(),
 			modified_on: knex.fn.now(),
 		};
@@ -299,8 +307,12 @@ const internalWireguard = {
 	/**
 	 * Delete a WireGuard client
 	 */
-	async deleteClient(knex, clientId) {
-		const client = await knex("wg_client").where("id", clientId).first();
+	async deleteClient(knex, clientId, access) {
+		const query = knex("wg_client").where("id", clientId);
+		if (access && !access.token.hasScope("admin")) {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
 		if (!client) {
 			throw new Error("Client not found");
 		}
@@ -314,8 +326,12 @@ const internalWireguard = {
 	/**
 	 * Toggle a WireGuard client enabled/disabled
 	 */
-	async toggleClient(knex, clientId, enabled) {
-		const client = await knex("wg_client").where("id", clientId).first();
+	async toggleClient(knex, clientId, enabled, access) {
+		const query = knex("wg_client").where("id", clientId);
+		if (access && !access.token.hasScope("admin")) {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
 		if (!client) {
 			throw new Error("Client not found");
 		}
@@ -333,8 +349,12 @@ const internalWireguard = {
 	/**
 	 * Update a WireGuard client
 	 */
-	async updateClient(knex, clientId, data) {
-		const client = await knex("wg_client").where("id", clientId).first();
+	async updateClient(knex, clientId, data, access) {
+		const query = knex("wg_client").where("id", clientId);
+		if (access && !access.token.hasScope("admin")) {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
 		if (!client) {
 			throw new Error("Client not found");
 		}
@@ -392,7 +412,7 @@ const internalWireguard = {
 	/**
 	 * Create a new WireGuard Interface Endpoint
 	 */
-	async createInterface(knex, data) {
+	async createInterface(knex, data, access) {
 		const existingIfaces = await knex("wg_interface").select("name", "listen_port");
 		const newIndex = existingIfaces.length;
 		
@@ -416,6 +436,7 @@ const internalWireguard = {
 			dns: data.dns || WG_DEFAULT_DNS,
 			host: data.host || WG_HOST,
 			isolate_clients: data.isolate_clients || false,
+			owner_user_id: access ? access.token.getUserId(1) : 1,
 			post_up: "iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
 			post_down: "iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE",
 			created_on: knex.fn.now(),
@@ -447,8 +468,12 @@ const internalWireguard = {
 	/**
 	 * Update an existing Interface
 	 */
-	async updateInterface(knex, id, data) {
-		const iface = await knex("wg_interface").where("id", id).first();
+	async updateInterface(knex, id, data, access) {
+		const query = knex("wg_interface").where("id", id);
+		if (access && !access.token.hasScope("admin")) {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const iface = await query.first();
 		if (!iface) throw new Error("Interface not found");
 		
 		const updateData = { modified_on: knex.fn.now() };
@@ -466,8 +491,12 @@ const internalWireguard = {
 	/**
 	 * Delete an interface
 	 */
-	async deleteInterface(knex, id) {
-		const iface = await knex("wg_interface").where("id", id).first();
+	async deleteInterface(knex, id, access) {
+		const query = knex("wg_interface").where("id", id);
+		if (access && !access.token.hasScope("admin")) {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const iface = await query.first();
 		if (!iface) throw new Error("Interface not found");
 		
 		try {
@@ -487,7 +516,15 @@ const internalWireguard = {
 	/**
 	 * Update Peering Links between WireGuard Interfaces
 	 */
-	async updateInterfaceLinks(knex, id, linkedServers) {
+	async updateInterfaceLinks(knex, id, linkedServers, access) {
+		// Verify ownership
+		const query = knex("wg_interface").where("id", id);
+		if (access && !access.token.hasScope("admin")) {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const iface = await query.first();
+		if (!iface) throw new Error("Interface not found");
+
 		// Clean up existing links where this interface is involved
 		await knex("wg_server_link").where("interface_id_1", id).orWhere("interface_id_2", id).del();
 		
@@ -507,8 +544,13 @@ const internalWireguard = {
 	/**
 	 * Get the WireGuard interfaces info
 	 */
-	async getInterfacesInfo(knex) {
-		const ifaces = await knex("wg_interface").select("*");
+	async getInterfacesInfo(knex, access) {
+		const query = knex("wg_interface").select("*");
+		// Filter by owner if not admin
+		if (access && !access.token.hasScope("admin")) {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const ifaces = await query;
 		const allLinks = await knex("wg_server_link").select("*");
 
 		return ifaces.map((i) => {
