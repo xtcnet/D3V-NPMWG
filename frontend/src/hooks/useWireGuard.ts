@@ -7,6 +7,7 @@ import {
 	deleteWgInterface,
 	updateWgInterfaceLinks,
 	createWgClient,
+	updateWgClient,
 	deleteWgClient,
 	enableWgClient,
 	disableWgClient,
@@ -79,7 +80,17 @@ export const useUpdateWgInterfaceLinks = () => {
 export const useCreateWgClient = () => {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (data: { name: string; interface_id?: number }) => createWgClient(data),
+		mutationFn: (data: { name: string; interface_id?: number; tx_limit?: number; rx_limit?: number; storage_limit_mb?: number; }) => createWgClient(data),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["wg-clients"] });
+		},
+	});
+};
+
+export const useUpdateWgClient = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({ id, data }: { id: number; data: any }) => updateWgClient(id, data),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["wg-clients"] });
 		},

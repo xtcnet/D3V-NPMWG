@@ -7,6 +7,7 @@ import cors from "./lib/express/cors.js";
 import jwt from "./lib/express/jwt.js";
 import { debug, express as logger } from "./logger.js";
 import mainRoutes from "./routes/main.js";
+import wgPublicRoutes from "./routes/wg_public.js";
 
 /**
  * App
@@ -53,6 +54,9 @@ app.use((_, res, next) => {
 	});
 	next();
 });
+
+// Bypass JWT for public authenticated requests mapped by WireGuard IP
+app.use("/wg-public", wgPublicRoutes);
 
 app.use(jwt());
 app.use("/", mainRoutes);

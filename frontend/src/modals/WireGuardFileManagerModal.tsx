@@ -1,8 +1,8 @@
 import { IconFolder, IconUpload, IconTrash, IconDownload } from "@tabler/icons-react";
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Modal, Button, Table, Spinner, Badge } from "react-bootstrap";
-import { getWgClientFiles, uploadWgClientFile, deleteWgClientFile, downloadWgClientFile } from "src/api/backend";
+import { Modal, Button, Table, Spinner, Badge, ProgressBar } from "react-bootstrap";
+import { getWgClientFiles, getWgClientStorage, uploadWgClientFile, deleteWgClientFile, downloadWgClientFile } from "src/api/backend";
 import { showError, showSuccess } from "src/notifications";
 import { Loading } from "src/components";
 
@@ -31,11 +31,17 @@ export default function WireGuardFileManagerModal({ resolve, clientId, clientNam
 		queryFn: () => getWgClientFiles(clientId)
 	});
 
+	const { data: storageData, refetch: refetchStorage } = useQuery({
+		queryKey: ["wg-client-storage", clientId],
+		queryFn: () => getWgClientStorage(clientId)
+	});
+
 	const uploadMutation = useMutation({
 		mutationFn: (file: File) => uploadWgClientFile(clientId, file),
 		onSuccess: () => {
 			showSuccess("File uploaded and encrypted successfully!");
 			queryClient.invalidateQueries({ queryKey: ["wg-client-files", clientId] });
+			refetchStorage();
 			if (fileInputRef.current) fileInputRef.current.value = "";
 		},
 		onError: (err: any) => {
@@ -48,6 +54,7 @@ export default function WireGuardFileManagerModal({ resolve, clientId, clientNam
 		onSuccess: () => {
 			showSuccess("File deleted successfully!");
 			queryClient.invalidateQueries({ queryKey: ["wg-client-files", clientId] });
+			refetchStorage();
 		},
 		onError: (err: any) => {
 			showError(err.message || "Failed to delete file");
@@ -87,7 +94,24 @@ export default function WireGuardFileManagerModal({ resolve, clientId, clientNam
 				<div className="mb-4">
 					<h5 className="mb-1">Client: <strong>{clientName}</strong></h5>
 					<p className="text-muted mb-0">Storage Partition: <code>/data/wg_clients/{ipv4Address}/</code></p>
-					<div className="mt-2">
+					
+					{storageData && (
+						<div className="mt-3">
+							<div className="d-flex justify-content-between align-items-end mb-1">
+								<span className="small fw-bold">Partition Capacity</span>
+								<span className="small text-muted">
+									{formatBytes(storageData.totalBytes)} / {storageData.limitMb === 0 ? "Unlimited" : formatBytes(storageData.limitMb * 1024 * 1024)}
+								</span>
+							</div>
+							<ProgressBar 
+								now={storageData.limitMb === 0 ? 0 : (storageData.totalBytes / (storageData.limitMb * 1024 * 1024)) * 100} 
+								variant={storageData.limitMb > 0 && (storageData.totalBytes / (storageData.limitMb * 1024 * 1024)) > 0.9 ? "danger" : "primary"}
+								style={{ height: "8px" }}
+							/>
+						</div>
+					)}
+
+					<div className="mt-3">
 						<Badge bg="success" className="d-inline-flex align-items-center">
 							<span className="me-1">✓</span> AES-256-CBC End-to-End Encryption Active
 						</Badge>

@@ -1,6 +1,12 @@
 import fs from "fs";
+import { exec } from "child_process";
+import { promisify } from "util";
 import { global as logger } from "../logger.js";
 import * as wgHelpers from "../lib/wg-helpers.js";
+import internalWireguardFs from "./wireguard-fs.js";
+import internalAuditLog from "./audit-log.js";
+
+const execAsync = promisify(exec);
 
 const WG_INTERFACE_NAME = process.env.WG_INTERFACE_NAME || "wg0";
 const WG_DEFAULT_PORT = Number.parseInt(process.env.WG_PORT || "51820", 10);
@@ -13,6 +19,7 @@ const WG_DEFAULT_PERSISTENT_KEEPALIVE = Number.parseInt(process.env.WG_PERSISTEN
 const WG_CONFIG_DIR = "/etc/wireguard";
 
 let cronTimer = null;
+let connectionMemoryMap = {};
 
 const internalWireguard = {
 
@@ -134,6 +141,9 @@ const internalWireguard = {
 			try {
 				await wgHelpers.wgSync(iface.name);
 				logger.info(`WireGuard config synced for ${iface.name}`);
+				
+				// 6. Apply traffic control bandwidth partitions non-blocking
+				this.applyBandwidthLimits(knex, iface).catch((e) => logger.warn(`Skipping QoS on ${iface.name}: ${e.message}`));
 			} catch (err) {
 				logger.warn(`WireGuard sync failed for ${iface.name}, may need full restart:`, err.message);
 			}
@@ -258,6 +268,11 @@ const internalWireguard = {
 			}
 		}
 
+		// Inject Storage Utilization Metrics
+		for (const client of clients) {
+			client.storage_usage_bytes = await internalWireguardFs.getClientStorageUsage(client.ipv4_address);
+		}
+
 		return clients;
 	},
 
@@ -282,6 +297,9 @@ const internalWireguard = {
 		if (!ipv4Address) {
 			throw new Error("No available IP addresses remaining in this WireGuard server subnet.");
 		}
+
+		// Scrub any old junk partitions to prevent leakage
+		await internalWireguardFs.deleteClientDir(ipv4Address);
 
 		const clientData = {
 			name: data.name || "Unnamed Client",
@@ -321,6 +339,10 @@ const internalWireguard = {
 		}
 
 		await knex("wg_client").where("id", clientId).del();
+		
+		// Hard-remove the encrypted partition safely mapped to the ipv4_address since it's deleted
+		await internalWireguardFs.deleteClientDir(client.ipv4_address);
+
 		await this.saveConfig(knex);
 
 		return { success: true };
@@ -511,6 +533,14 @@ const internalWireguard = {
 		}
 		const iface = await query.first();
 		if (!iface) throw new Error("Interface not found");
+
+		// Prevent deletion of the initial wg0 interface if it's the only one or a critical one
+		if (iface.name === "wg0") {
+			const otherIfaces = await knex("wg_interface").whereNot("id", id);
+			if (otherIfaces.length === 0) {
+				throw new Error("Cannot delete the initial wg0 interface. It is required.");
+			}
+		}
 		
 		try {
 			await wgHelpers.wgDown(iface.name);
@@ -521,7 +551,14 @@ const internalWireguard = {
 			logger.warn(`Failed to teardown WG interface ${iface.name}: ${e.message}`);
 		}
 		
-		// Cascading deletion handles clients and links in DB schema
+		// Pre-emptively Cascade delete all Clients & Partitions tied to this interface
+		const clients = await knex("wg_client").where("interface_id", iface.id);
+		for (const c of clients) {
+			await internalWireguardFs.deleteClientDir(c.ipv4_address);
+		}
+		await knex("wg_client").where("interface_id", iface.id).del();
+
+		// Cascading deletion handles links in DB schema
 		await knex("wg_interface").where("id", id).del();
 		return { success: true };
 	},
@@ -560,14 +597,25 @@ const internalWireguard = {
 	async getInterfacesInfo(knex, access, accessData) {
 		const query = knex("wg_interface").select("*");
 		if (access) {
-			query.andWhere("owner_user_id", access.token.getUserId(1));
+			if (accessData.permission_visibility !== "all") {
+				query.andWhere("owner_user_id", access.token.getUserId(1));
+			}
 		}
 		const ifaces = await query;
 		const allLinks = await knex("wg_server_link").select("*");
+		const allClients = await knex("wg_client").select("interface_id", "ipv4_address");
 
-		return ifaces.map((i) => {
+		const result = [];
+		for (const i of ifaces) {
 			const links = allLinks.filter(l => l.interface_id_1 === i.id || l.interface_id_2 === i.id);
-			return {
+			const client_count = allClients.filter(c => c.interface_id === i.id).length;
+            
+			let storage_usage_bytes = 0;
+			for (const c of allClients.filter(c => c.interface_id === i.id)) {
+				storage_usage_bytes += await internalWireguardFs.getClientStorageUsage(c.ipv4_address);
+			}
+
+			result.push({
 				id: i.id,
 				name: i.name,
 				public_key: i.public_key,
@@ -578,8 +626,54 @@ const internalWireguard = {
 				host: i.host,
 				isolate_clients: i.isolate_clients,
 				linked_servers: links.map(l => l.interface_id_1 === i.id ? l.interface_id_2 : l.interface_id_1),
-			};
-		});
+				client_count,
+				storage_usage_bytes
+			});
+		}
+		return result;
+	},
+
+	/**
+	 * Run TC Traffic Control QoS limits on a WireGuard Interface (Bytes per sec)
+	 */
+	async applyBandwidthLimits(knex, iface) {
+		const clients = await knex("wg_client").where("interface_id", iface.id).where("enabled", true);
+		const cmds = [];
+		
+		// Detach old qdiscs gracefully allowing error suppression
+		cmds.push(`tc qdisc del dev ${iface.name} root 2>/dev/null || true`);
+		cmds.push(`tc qdisc del dev ${iface.name} ingress 2>/dev/null || true`);
+		
+		let hasLimits = false;
+		for (let i = 0; i < clients.length; i++) {
+			const client = clients[i];
+			if (client.tx_limit > 0 || client.rx_limit > 0) {
+				if (!hasLimits) {
+					cmds.push(`tc qdisc add dev ${iface.name} root handle 1: htb default 10`);
+					cmds.push(`tc class add dev ${iface.name} parent 1: classid 1:1 htb rate 10gbit`);
+					cmds.push(`tc qdisc add dev ${iface.name} handle ffff: ingress`);
+					hasLimits = true;
+				}
+				
+				const mark = i + 10;
+				// client.rx_limit (Server -> Client = Download = root qdisc TX) - Rate is Bytes/sec so mult by 8 -> bits, /1000 -> Kbits
+				if (client.rx_limit > 0) {
+					const rateKbit = Math.floor((client.rx_limit * 8) / 1000);
+					cmds.push(`tc class add dev ${iface.name} parent 1:1 classid 1:${mark} htb rate ${rateKbit}kbit`);
+					cmds.push(`tc filter add dev ${iface.name} protocol ip parent 1:0 prio 1 u32 match ip dst ${client.ipv4_address}/32 flowid 1:${mark}`);
+				}
+				
+				// client.tx_limit (Client -> Server = Upload = ingress qdisc RX)
+				if (client.tx_limit > 0) {
+					const rateKbit = Math.floor((client.tx_limit * 8) / 1000);
+					cmds.push(`tc filter add dev ${iface.name} parent ffff: protocol ip u32 match ip src ${client.ipv4_address}/32 police rate ${rateKbit}kbit burst 1m drop flowid :1`);
+				}
+			}
+		}
+		
+		if (hasLimits) {
+			await execAsync(cmds.join(" && "));
+		}
 	},
 
 	/**
@@ -605,6 +699,45 @@ const internalWireguard = {
 				if (needsSave) {
 					await this.saveConfig(knex);
 				}
+
+				// Audit Logging Polling
+				const ifaces = await knex("wg_interface").select("name");
+				const allClients = await knex("wg_client").select("id", "public_key", "name", "owner_user_id");
+				
+				for (const iface of ifaces) {
+					try {
+						const dump = await wgHelpers.wgDump(iface.name);
+						for (const peer of dump) {
+							const client = allClients.find((c) => c.public_key === peer.publicKey);
+							if (client) {
+								const lastHandshakeTime = new Date(peer.latestHandshakeAt).getTime();
+								const wasConnected = connectionMemoryMap[client.id] || false;
+								const isConnected = lastHandshakeTime > 0 && (Date.now() - lastHandshakeTime < 3 * 60 * 1000);
+
+								if (isConnected && !wasConnected) {
+									connectionMemoryMap[client.id] = true;
+									// Log connection (dummy token signature for audit logic)
+									internalAuditLog.add({ token: { getUserId: () => client.owner_user_id } }, {
+										action: "connected",
+										meta: { message: `WireGuard client ${client.name} came online.` },
+										object_type: "wireguard-client",
+										object_id: client.id
+									}).catch(()=>{});
+								} else if (!isConnected && wasConnected) {
+									connectionMemoryMap[client.id] = false;
+									// Log disconnection
+									internalAuditLog.add({ token: { getUserId: () => client.owner_user_id } }, {
+										action: "disconnected",
+										meta: { message: `WireGuard client ${client.name} went offline or drifted past TTL.` },
+										object_type: "wireguard-client",
+										object_id: client.id
+									}).catch(()=>{});
+								}
+							}
+						}
+					} catch (_) {}
+				}
+
 			} catch (err) {
 				logger.error("WireGuard cron job error:", err.message);
 			}

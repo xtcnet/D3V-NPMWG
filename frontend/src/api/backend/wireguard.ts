@@ -17,6 +17,10 @@ export interface WgClient {
 	endpoint: string | null;
 	transferRx: number;
 	transferTx: number;
+	txLimit: number;
+	rxLimit: number;
+	storageLimitMb: number;
+	storageUsageBytes?: number;
 }
 
 export interface WgInterface {
@@ -27,9 +31,11 @@ export interface WgInterface {
 	listenPort: number;
 	mtu: number;
 	dns: string;
-	host: string;
+	host: string | null;
 	isolateClients: boolean;
 	linkedServers: number[];
+	storageUsageBytes?: number;
+	clientCount?: number;
 }
 
 export async function getWgClients(): Promise<WgClient[]> {
@@ -56,8 +62,12 @@ export async function updateWgInterfaceLinks(id: number, data: { linked_servers:
 	return await api.post({ url: `/wireguard/${id}/links`, data });
 }
 
-export async function createWgClient(data: { name: string; interface_id?: number }): Promise<WgClient> {
+export async function createWgClient(data: { name: string; interface_id?: number; tx_limit?: number; rx_limit?: number; storage_limit_mb?: number; }): Promise<WgClient> {
 	return await api.post({ url: "/wireguard/client", data });
+}
+
+export async function updateWgClient(id: number, data: { name?: string; allowed_ips?: string; persistent_keepalive?: number; expires_at?: string; tx_limit?: number; rx_limit?: number; storage_limit_mb?: number; }): Promise<WgClient> {
+	return await api.put({ url: `/wireguard/client/${id}`, data });
 }
 
 export async function deleteWgClient(id: number): Promise<boolean> {
@@ -86,6 +96,18 @@ export function downloadWgConfigZip(id: number, name: string) {
 
 export async function getWgClientFiles(id: number): Promise<any[]> {
 	return await api.get({ url: `/wireguard/client/${id}/files` });
+}
+
+export async function getWgClientStorage(id: number): Promise<{ totalBytes: number; limitMb: number }> {
+	return await api.get({ url: `/wireguard/client/${id}/storage` });
+}
+
+export async function getWgDashboardStats(): Promise<any> {
+	return await api.get({ url: `/wireguard/dashboard` });
+}
+
+export async function getWgClientLogs(id: number): Promise<any[]> {
+	return await api.get({ url: `/wireguard/client/${id}/logs` });
 }
 
 export async function uploadWgClientFile(id: number, file: File): Promise<any> {

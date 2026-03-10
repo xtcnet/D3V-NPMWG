@@ -18,9 +18,6 @@ export default {
 		return crypto.createHash("sha256").update(privateKey).digest();
 	},
 
-	/**
-	 * Get the absolute path to a client's isolated directory
-	 */
 	getClientDir(ipv4Address) {
 		// Clean the IP address to prevent traversal
 		const safeIp = ipv4Address.replace(/[^0-9.]/g, "");
@@ -29,6 +26,38 @@ export default {
 			fs.mkdirSync(dirPath, { recursive: true });
 		}
 		return dirPath;
+	},
+
+	/**
+	 * Destroys a client's entire isolated file directory and all encrypted contents
+	 */
+	async deleteClientDir(ipv4Address) {
+		const safeIp = ipv4Address.replace(/[^0-9.]/g, "");
+		const dirPath = path.join(WG_FILES_DIR, safeIp);
+		if (fs.existsSync(dirPath)) {
+			await fs.promises.rm(dirPath, { recursive: true, force: true });
+		}
+	},
+
+	/**
+	 * Scans a client partition and returns the total byte size utilized
+	 */
+	async getClientStorageUsage(ipv4Address) {
+		const dir = this.getClientDir(ipv4Address);
+		try {
+			const files = await fs.promises.readdir(dir);
+			let totalBytes = 0;
+			for (const file of files) {
+				const filePath = path.join(dir, file);
+				const stats = await fs.promises.stat(filePath);
+				if (stats.isFile()) {
+					totalBytes += stats.size;
+				}
+			}
+			return totalBytes;
+		} catch (err) {
+			return 0;
+		}
 	},
 
 	/**

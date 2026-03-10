@@ -27,9 +27,23 @@ const DeadHosts = lazy(() => import("src/pages/Nginx/DeadHosts"));
 const Streams = lazy(() => import("src/pages/Nginx/Streams"));
 const WireGuard = lazy(() => import("src/pages/WireGuard"));
 const DatabaseManager = lazy(() => import("src/pages/DatabaseManager"));
+const WgPublicPortal = lazy(() => import("src/pages/WgPublicPortal"));
 
 function Router() {
 	const health = useHealth();
+	
+	const isPublicWg = window.location.pathname.startsWith("/wg-public");
+	if (isPublicWg) {
+		return (
+			<BrowserRouter>
+				<Suspense fallback={<LoadingPage />}>
+					<Routes>
+						<Route path="/wg-public/*" element={<WgPublicPortal />} />
+					</Routes>
+				</Suspense>
+			</BrowserRouter>
+		);
+	}
 	const { authenticated } = useAuthState();
 
 	if (health.isLoading) {

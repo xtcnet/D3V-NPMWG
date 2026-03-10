@@ -11,6 +11,7 @@ import {
 	IconLink,
 	IconZip,
 	IconFolder,
+	IconNotes,
 } from "@tabler/icons-react";
 import EasyModal from "ez-modal-react";
 import { useState } from "react";
@@ -25,6 +26,7 @@ import {
 	useUpdateWgInterfaceLinks,
 	useCreateWgClient,
 	useDeleteWgClient,
+	useUpdateWgClient,
 	useToggleWgClient,
 } from "src/hooks/useWireGuard";
 import WireGuardClientModal from "src/modals/WireGuardClientModal";
@@ -32,6 +34,8 @@ import WireGuardServerModal from "src/modals/WireGuardServerModal";
 import WireGuardLinkedServersModal from "src/modals/WireGuardLinkedServersModal";
 import WireGuardQRModal from "src/modals/WireGuardQRModal";
 import WireGuardFileManagerModal from "src/modals/WireGuardFileManagerModal";
+import WireGuardClientEditModal from "src/modals/WireGuardClientEditModal";
+import WireGuardClientLogsModal from "src/modals/WireGuardClientLogsModal";
 
 function formatBytes(bytes: number | null): string {
 	if (bytes === null || bytes === 0) return "0 B";
@@ -60,6 +64,7 @@ function WireGuard() {
 	const updateLinks = useUpdateWgInterfaceLinks();
 
 	const createClient = useCreateWgClient();
+	const updateClient = useUpdateWgClient();
 	const deleteClient = useDeleteWgClient();
 	const toggleClient = useToggleWgClient();
 
@@ -134,7 +139,14 @@ function WireGuard() {
 		}
 		const result = (await EasyModal.show(WireGuardClientModal, { interfaces: interfaces || [] })) as any;
 		if (result && result.name && result.interface_id) {
-			createClient.mutate({ name: result.name, interface_id: result.interface_id });
+			createClient.mutate(result);
+		}
+	};
+
+	const handleEditClient = async (client: any) => {
+		const result = (await EasyModal.show(WireGuardClientEditModal, { client })) as any;
+		if (result) {
+			updateClient.mutate({ id: client.id, data: result });
 		}
 	};
 
@@ -167,6 +179,13 @@ function WireGuard() {
 			clientId: client.id, 
 			clientName: client.name,
 			ipv4Address: client.ipv4Address
+		});
+	};
+
+	const handleLogs = (client: any) => {
+		EasyModal.show(WireGuardClientLogsModal, {
+			clientId: client.id,
+			clientName: client.name
 		});
 	};
 
@@ -228,6 +247,7 @@ function WireGuard() {
 								<th>Port</th>
 								<th>Endpoint Host</th>
 								<th>Isolation</th>
+								<th>Capacity</th>
 								<th>Links</th>
 								<th className="text-end">Actions</th>
 							</tr>
@@ -247,6 +267,12 @@ function WireGuard() {
 										) : (
 											<span className="badge bg-secondary text-secondary-fg">Disabled</span>
 										)}
+									</td>
+									<td>
+										<div className="d-flex flex-column small">
+											<span className="text-muted"><IconServer size={14} className="me-1"/> {iface.clientCount || 0} Clients</span>
+											<span className="text-muted"><IconFolder size={14} className="me-1"/> {formatBytes(iface.storageUsageBytes ?? 0)}</span>
+										</div>
 									</td>
 									<td>
 										<div className="d-flex align-items-center">
@@ -362,7 +388,7 @@ function WireGuard() {
 								<th>Server</th>
 								<th>IP Address</th>
 								<th>Last Handshake</th>
-								<th>Transfer ↓ / ↑</th>
+								<th>Traffic & Storage</th>
 								<th className="text-end">Actions</th>
 							</tr>
 						</thead>
@@ -401,12 +427,24 @@ function WireGuard() {
 										<td>{timeAgo(client.latestHandshakeAt)}</td>
 										<td>
 											<div className="d-flex flex-column text-muted small">
-												<span>↓ {formatBytes(client.transferRx)}</span>
-												<span>↑ {formatBytes(client.transferTx)}</span>
+												<span>↓ {formatBytes(client.transferRx)} / ↑ {formatBytes(client.transferTx)}</span>
+												<span className={client.storageLimitMb > 0 && ((client.storageUsageBytes||0) / (client.storageLimitMb * 1024 * 1024)) > 0.9 ? "text-danger" : ""}>
+													<IconFolder size={14} className="me-1"/> {formatBytes(client.storageUsageBytes || 0)} / {client.storageLimitMb === 0 ? "∞" : formatBytes(client.storageLimitMb * 1024 * 1024)}
+												</span>
 											</div>
 										</td>
 										<td className="text-end">
 											<div className="btn-group btn-group-sm">
+												<button
+													type="button"
+													className="btn btn-outline-secondary"
+													title="Edit Client"
+													onClick={() =>
+														handleEditClient(client)
+													}
+												>
+													<IconEdit size={16} />
+												</button>
 												<button
 													type="button"
 													className="btn btn-outline-primary"
@@ -426,6 +464,16 @@ function WireGuard() {
 													}
 												>
 													<IconFolder size={16} />
+												</button>
+												<button
+													type="button"
+													className="btn btn-outline-dark"
+													title="View Event Logs"
+													onClick={() =>
+														handleLogs(client)
+													}
+												>
+													<IconNotes size={16} />
 												</button>
 												<button
 													type="button"

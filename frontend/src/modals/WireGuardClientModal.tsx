@@ -13,6 +13,9 @@ const WireGuardClientModal = EasyModal.create(({ interfaces, defaultInterfaceId 
 	const modal = useModal<any>();
 	const [name, setName] = useState("");
 	const [selectedInterfaceId, setSelectedInterfaceId] = useState<number>(0);
+	const [storageLimitMb, setStorageLimitMb] = useState<number>(500);
+	const [txLimit, setTxLimit] = useState<number>(0);
+	const [rxLimit, setRxLimit] = useState<number>(0);
 
 	useEffect(() => {
 		if (defaultInterfaceId) {
@@ -27,7 +30,10 @@ const WireGuardClientModal = EasyModal.create(({ interfaces, defaultInterfaceId 
 		if (name.trim() && selectedInterfaceId) {
 			modal.resolve({ 
 				name: name.trim(),
-				interface_id: selectedInterfaceId
+				interface_id: selectedInterfaceId,
+				storage_limit_mb: storageLimitMb,
+				tx_limit: txLimit,
+				rx_limit: rxLimit
 			});
 			modal.hide();
 		}
@@ -90,6 +96,60 @@ const WireGuardClientModal = EasyModal.create(({ interfaces, defaultInterfaceId 
 							</div>
 						</div>
 					)}
+
+					<hr />
+					<h5 className="mb-3">Limits & Quotas</h5>
+					
+					<div className="mb-3">
+						<label htmlFor="wg-client-storage" className="form-label required">
+							Storage Partition Limit (MB)
+						</label>
+						<input
+							type="number"
+							className="form-control"
+							id="wg-client-storage"
+							value={storageLimitMb}
+							onChange={(e) => setStorageLimitMb(Number(e.target.value))}
+							min="0"
+							required
+						/>
+						<div className="form-text">
+							Maximum size of encrypted file storage per client. 0 = Unlimited.
+						</div>
+					</div>
+
+					<div className="row">
+						<div className="col-md-6 mb-3">
+							<label htmlFor="wg-client-tx" className="form-label">
+								Upload Bandwidth Limit (Bytes)
+							</label>
+							<input
+								type="number"
+								className="form-control"
+								id="wg-client-tx"
+								value={txLimit}
+								onChange={(e) => setTxLimit(Number(e.target.value))}
+								min="0"
+								required
+							/>
+							<div className="form-text">Optional. 0 = Unlimited.</div>
+						</div>
+						<div className="col-md-6 mb-3">
+							<label htmlFor="wg-client-rx" className="form-label">
+								Download Bandwidth Limit (Bytes)
+							</label>
+							<input
+								type="number"
+								className="form-control"
+								id="wg-client-rx"
+								value={rxLimit}
+								onChange={(e) => setRxLimit(Number(e.target.value))}
+								min="0"
+								required
+							/>
+							<div className="form-text">Optional. 0 = Unlimited.</div>
+						</div>
+					</div>
 
 				</Modal.Body>
 				<Modal.Footer>

@@ -32,6 +32,61 @@ router.get("/", async (_req, res, next) => {
 });
 
 /**
+ * GET /api/wireguard/dashboard
+ * Aggregated analytics for the main dashboard
+ */
+router.get("/dashboard", async (req, res, next) => {
+	try {
+		const knex = db();
+		const access = res.locals.access;
+		const accessData = await access.can("proxy_hosts:get");
+		
+		const query = knex("wg_client").select("*");
+		if (accessData.permission_visibility !== "all") {
+			query.where("owner_user_id", access.token.getUserId(1));
+		}
+		const clients = await query;
+		
+		let totalStorageBytes = 0;
+		let totalTransferRx = 0;
+		let totalTransferTx = 0;
+		let online24h = 0;
+		let online7d = 0;
+		let online30d = 0;
+		
+		const now = Date.now();
+		const DAY = 24 * 60 * 60 * 1000;
+		
+		for (const client of clients) {
+			try {
+				totalStorageBytes += await internalWireguardFs.getClientStorageUsage(client.ipv4_address);
+			} catch (_) {}
+			totalTransferRx += Number(client.transfer_rx || 0);
+			totalTransferTx += Number(client.transfer_tx || 0);
+			
+			if (client.latest_handshake_at) {
+				const handshake = new Date(client.latest_handshake_at).getTime();
+				if (now - handshake <= DAY) online24h++;
+				if (now - handshake <= 7 * DAY) online7d++;
+				if (now - handshake <= 30 * DAY) online30d++;
+			}
+		}
+		
+		res.status(200).json({
+			totalStorageBytes,
+			totalTransferRx,
+			totalTransferTx,
+			online24h,
+			online7d,
+			online30d,
+			totalClients: clients.length
+		});
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
  * POST /api/wireguard
  * Create a new WireGuard interface
  */
@@ -359,6 +414,61 @@ router.get("/client/:id/configuration.zip", async (req, res, next) => {
 });
 
 /**
+ * GET /api/wireguard/client/:id/storage
+ * Get storage usage for a client
+ */
+router.get("/client/:id/storage", async (req, res, next) => {
+	try {
+		const knex = db();
+		const access = res.locals.access;
+		const accessData = await access.can("proxy_hosts:get");
+		const query = knex("wg_client").where("id", req.params.id);
+		if (accessData.permission_visibility !== "all") {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
+		if (!client) {
+			return res.status(404).json({ error: { message: "Client not found" } });
+		}
+		
+		const totalBytes = await internalWireguardFs.getClientStorageUsage(client.ipv4_address);
+		res.status(200).json({ totalBytes, limitMb: client.storage_limit_mb });
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
+ * GET /api/wireguard/client/:id/logs
+ * Get connection history logs for a client
+ */
+router.get("/client/:id/logs", async (req, res, next) => {
+	try {
+		const knex = db();
+		const access = res.locals.access;
+		const accessData = await access.can("proxy_hosts:get");
+		const query = knex("wg_client").where("id", req.params.id);
+		if (accessData.permission_visibility !== "all") {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
+		if (!client) {
+			return res.status(404).json({ error: { message: "Client not found" } });
+		}
+		
+		const logs = await knex("audit_log")
+			.where("object_type", "wireguard-client")
+			.andWhere("object_id", req.params.id)
+			.orderBy("created_on", "desc")
+			.limit(100);
+			
+		res.status(200).json(logs);
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
  * GET /api/wireguard/client/:id/files
  * List files for a client
  */
@@ -406,6 +516,22 @@ router.post("/client/:id/files", async (req, res, next) => {
 		}
 		
 		const uploadedFile = req.files.file;
+
+		// Enforce Storage Quota if not unlimited (0)
+		if (client.storage_limit_mb > 0) {
+			const currentUsageBytes = await internalWireguardFs.getClientStorageUsage(client.ipv4_address);
+			const requestedSize = uploadedFile.size;
+			const maxBytes = client.storage_limit_mb * 1024 * 1024;
+			
+			if (currentUsageBytes + requestedSize > maxBytes) {
+				return res.status(413).json({ 
+					error: { 
+						message: `Storage Quota Exceeded. Maximum allowed: ${client.storage_limit_mb} MB.` 
+					} 
+				});
+			}
+		}
+
 		const result = await internalWireguardFs.uploadFile(client.ipv4_address, client.private_key, uploadedFile.name, uploadedFile.data);
 		
 		await internalAuditLog.add(access, {

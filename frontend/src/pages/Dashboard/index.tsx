@@ -5,8 +5,11 @@ import {
 	IconDisc,
 	IconNetwork,
 	IconServer,
+	IconFolder
 } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { getWgDashboardStats } from "src/api/backend/wireguard";
 import { HasPermission } from "src/components";
 import { useHostReport } from "src/hooks";
 import { T } from "src/locale";
@@ -18,9 +21,23 @@ import {
 	VIEW,
 } from "src/modules/Permissions";
 
+function formatBytes(bytes: number | null): string {
+	if (bytes === null || bytes === 0) return "0 B";
+	const k = 1024;
+	const sizes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+}
+
 const Dashboard = () => {
 	const { data: hostReport } = useHostReport();
 	const navigate = useNavigate();
+
+	const { data: wgStats } = useQuery({
+		queryKey: ["wg-dashboard-stats"],
+		queryFn: getWgDashboardStats,
+		refetchInterval: 10000
+	});
 
 	return (
 		<div>
@@ -190,6 +207,68 @@ const Dashboard = () => {
 					</div>
 				</div>
 			</div>
+
+			{/* ====== WireGuard Extended Analytics ====== */}
+			<div className="mt-4 mb-4">
+				<h3 className="mb-3"><IconNetwork className="me-2 text-muted" size={24} />WireGuard Global Analytics</h3>
+				<div className="row row-cards">
+					<div className="col-sm-6 col-lg-3">
+						<div className="card">
+							<div className="card-body">
+								<div className="d-flex align-items-center">
+									<div className="subheader">Total Storage Utilized</div>
+								</div>
+								<div className="h1 mb-3">{formatBytes(wgStats?.totalStorageBytes || 0)}</div>
+								<div className="d-flex mb-2">
+									<div className="text-muted small"><IconFolder size={14} className="me-1"/> Encrypted Partition Capacity</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div className="col-sm-6 col-lg-3">
+						<div className="card">
+							<div className="card-body">
+								<div className="d-flex align-items-center">
+									<div className="subheader">Global Traffic Transfer</div>
+								</div>
+								<div className="h1 mb-3 text-blue">{formatBytes((wgStats?.totalTransferRx || 0) + (wgStats?.totalTransferTx || 0))}</div>
+								<div className="d-flex mb-2">
+									<div className="text-muted small">
+										↓ {formatBytes(wgStats?.totalTransferRx || 0)} | ↑ {formatBytes(wgStats?.totalTransferTx || 0)}
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div className="col-sm-6 col-lg-3">
+						<div className="card">
+							<div className="card-body">
+								<div className="d-flex align-items-center">
+									<div className="subheader">Active Connectivity</div>
+								</div>
+								<div className="h1 mb-3 text-green">{wgStats?.online24h || 0} Clients</div>
+								<div className="d-flex mb-2">
+									<div className="text-muted small">Online past 24 hours</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div className="col-sm-6 col-lg-3">
+						<div className="card">
+							<div className="card-body">
+								<div className="d-flex align-items-center">
+									<div className="subheader">Extended Retention</div>
+								</div>
+								<div className="h1 mb-3">{wgStats?.online7d || 0} <span className="text-muted fs-4">/ {wgStats?.online30d || 0}</span></div>
+								<div className="d-flex mb-2">
+									<div className="text-muted small">7 Days / 30 Days Trend</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
 		</div>
 	);
 };
