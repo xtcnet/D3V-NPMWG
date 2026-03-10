@@ -62,3 +62,4 @@ export * from "./uploadCertificate";
 export * from "./validateCertificate";
 export * from "./twoFactor";
 export * from "./wireguard";
+export * from "./database";

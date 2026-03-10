@@ -22,7 +22,8 @@ router.get("/", async (_req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const ifaces = await internalWireguard.getInterfacesInfo(knex, access);
+		const accessData = await access.can("proxy_hosts:list");
+		const ifaces = await internalWireguard.getInterfacesInfo(knex, access, accessData);
 		res.status(200).json(ifaces);
 	} catch (err) {
 		next(err);
@@ -37,7 +38,8 @@ router.post("/", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const iface = await internalWireguard.createInterface(knex, req.body, access);
+		const accessData = await access.can("proxy_hosts:create");
+		const iface = await internalWireguard.createInterface(knex, req.body, access, accessData);
 		await internalAuditLog.add(access, {
 			action: "created",
 			object_type: "wireguard-server",
@@ -58,7 +60,8 @@ router.put("/:id", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const iface = await internalWireguard.updateInterface(knex, req.params.id, req.body, access);
+		const accessData = await access.can("proxy_hosts:update");
+		const iface = await internalWireguard.updateInterface(knex, req.params.id, req.body, access, accessData);
 		await internalAuditLog.add(access, {
 			action: "updated",
 			object_type: "wireguard-server",
@@ -79,7 +82,8 @@ router.delete("/:id", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const result = await internalWireguard.deleteInterface(knex, req.params.id, access);
+		const accessData = await access.can("proxy_hosts:delete");
+		const result = await internalWireguard.deleteInterface(knex, req.params.id, access, accessData);
 		await internalAuditLog.add(access, {
 			action: "deleted",
 			object_type: "wireguard-server",
@@ -100,7 +104,8 @@ router.post("/:id/links", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const result = await internalWireguard.updateInterfaceLinks(knex, req.params.id, req.body.linked_servers || [], access);
+		const accessData = await access.can("proxy_hosts:update");
+		const result = await internalWireguard.updateInterfaceLinks(knex, req.params.id, req.body.linked_servers || [], access, accessData);
 		await internalAuditLog.add(access, {
 			action: "updated",
 			object_type: "wireguard-server-links",
@@ -121,7 +126,8 @@ router.get("/client", async (_req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const clients = await internalWireguard.getClients(knex, access);
+		const accessData = await access.can("proxy_hosts:list");
+		const clients = await internalWireguard.getClients(knex, access, accessData);
 		res.status(200).json(clients);
 	} catch (err) {
 		next(err);
@@ -136,7 +142,8 @@ router.post("/client", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const client = await internalWireguard.createClient(knex, req.body, access);
+		const accessData = await access.can("proxy_hosts:create");
+		const client = await internalWireguard.createClient(knex, req.body, access, accessData);
 		await internalAuditLog.add(access, {
 			action: "created",
 			object_type: "wireguard-client",
@@ -157,8 +164,9 @@ router.get("/client/:id", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
+		const accessData = await access.can("proxy_hosts:get");
 		const query = knex("wg_client").where("id", req.params.id);
-		if (!access.token.hasScope("admin")) {
+		if (accessData.permission_visibility !== "all") {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const client = await query.first();
@@ -179,7 +187,8 @@ router.put("/client/:id", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const client = await internalWireguard.updateClient(knex, req.params.id, req.body, access);
+		const accessData = await access.can("proxy_hosts:update");
+		const client = await internalWireguard.updateClient(knex, req.params.id, req.body, access, accessData);
 		await internalAuditLog.add(access, {
 			action: "updated",
 			object_type: "wireguard-client",
@@ -200,7 +209,8 @@ router.delete("/client/:id", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const result = await internalWireguard.deleteClient(knex, req.params.id, access);
+		const accessData = await access.can("proxy_hosts:delete");
+		const result = await internalWireguard.deleteClient(knex, req.params.id, access, accessData);
 		await internalAuditLog.add(access, {
 			action: "deleted",
 			object_type: "wireguard-client",
@@ -221,7 +231,8 @@ router.post("/client/:id/enable", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const client = await internalWireguard.toggleClient(knex, req.params.id, true, access);
+		const accessData = await access.can("proxy_hosts:update");
+		const client = await internalWireguard.toggleClient(knex, req.params.id, true, access, accessData);
 		await internalAuditLog.add(access, {
 			action: "enabled",
 			object_type: "wireguard-client",
@@ -242,7 +253,8 @@ router.post("/client/:id/disable", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const client = await internalWireguard.toggleClient(knex, req.params.id, false, access);
+		const accessData = await access.can("proxy_hosts:update");
+		const client = await internalWireguard.toggleClient(knex, req.params.id, false, access, accessData);
 		await internalAuditLog.add(access, {
 			action: "disabled",
 			object_type: "wireguard-client",
@@ -263,8 +275,9 @@ router.get("/client/:id/configuration", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
+		const accessData = await access.can("proxy_hosts:get");
 		const query = knex("wg_client").where("id", req.params.id);
-		if (!access.token.hasScope("admin")) {
+		if (accessData.permission_visibility !== "all") {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const client = await query.first();
@@ -289,8 +302,9 @@ router.get("/client/:id/qrcode.svg", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
+		const accessData = await access.can("proxy_hosts:get");
 		const query = knex("wg_client").where("id", req.params.id);
-		if (!access.token.hasScope("admin")) {
+		if (accessData.permission_visibility !== "all") {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const client = await query.first();
@@ -313,8 +327,9 @@ router.get("/client/:id/configuration.zip", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
+		const accessData = await access.can("proxy_hosts:get");
 		const query = knex("wg_client").where("id", req.params.id);
-		if (!access.token.hasScope("admin")) {
+		if (accessData.permission_visibility !== "all") {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const client = await query.first();

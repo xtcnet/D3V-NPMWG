@@ -205,7 +205,7 @@ const internalWireguard = {
 	/**
 	 * Get all clients with live status and interface name correlation
 	 */
-	async getClients(knex, access) {
+	async getClients(knex, access, accessData) {
 		await this.getOrCreateInterface(knex); // Ensure structure exists
 		
 		const query = knex("wg_client")
@@ -214,7 +214,7 @@ const internalWireguard = {
 			.orderBy("wg_client.created_on", "desc");
 
 		// Filter by owner if not admin
-		if (access && !access.token.hasScope("admin")) {
+		if (access && (!accessData || accessData.permission_visibility !== "all")) {
 			query.andWhere("wg_client.owner_user_id", access.token.getUserId(1));
 		}
 
@@ -265,7 +265,7 @@ const internalWireguard = {
 	/**
 	 * Create a new WireGuard client
 	 */
-	async createClient(knex, data, access) {
+	async createClient(knex, data, access, accessData) {
 		const iface = data.interface_id 
 			? await knex("wg_interface").where("id", data.interface_id).first()
 			: await this.getOrCreateInterface(knex);
@@ -307,9 +307,9 @@ const internalWireguard = {
 	/**
 	 * Delete a WireGuard client
 	 */
-	async deleteClient(knex, clientId, access) {
+	async deleteClient(knex, clientId, access, accessData) {
 		const query = knex("wg_client").where("id", clientId);
-		if (access && !access.token.hasScope("admin")) {
+		if (access && (!accessData || accessData.permission_visibility !== "all")) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const client = await query.first();
@@ -326,9 +326,9 @@ const internalWireguard = {
 	/**
 	 * Toggle a WireGuard client enabled/disabled
 	 */
-	async toggleClient(knex, clientId, enabled, access) {
+	async toggleClient(knex, clientId, enabled, access, accessData) {
 		const query = knex("wg_client").where("id", clientId);
-		if (access && !access.token.hasScope("admin")) {
+		if (access && (!accessData || accessData.permission_visibility !== "all")) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const client = await query.first();
@@ -349,9 +349,9 @@ const internalWireguard = {
 	/**
 	 * Update a WireGuard client
 	 */
-	async updateClient(knex, clientId, data, access) {
+	async updateClient(knex, clientId, data, access, accessData) {
 		const query = knex("wg_client").where("id", clientId);
-		if (access && !access.token.hasScope("admin")) {
+		if (access && (!accessData || accessData.permission_visibility !== "all")) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const client = await query.first();
@@ -412,7 +412,7 @@ const internalWireguard = {
 	/**
 	 * Create a new WireGuard Interface Endpoint
 	 */
-	async createInterface(knex, data, access) {
+	async createInterface(knex, data, access, accessData) {
 		const existingIfaces = await knex("wg_interface").select("name", "listen_port");
 		const newIndex = existingIfaces.length;
 		
@@ -468,9 +468,9 @@ const internalWireguard = {
 	/**
 	 * Update an existing Interface
 	 */
-	async updateInterface(knex, id, data, access) {
+	async updateInterface(knex, id, data, access, accessData) {
 		const query = knex("wg_interface").where("id", id);
-		if (access && !access.token.hasScope("admin")) {
+		if (access && (!accessData || accessData.permission_visibility !== "all")) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const iface = await query.first();
@@ -491,9 +491,9 @@ const internalWireguard = {
 	/**
 	 * Delete an interface
 	 */
-	async deleteInterface(knex, id, access) {
+	async deleteInterface(knex, id, access, accessData) {
 		const query = knex("wg_interface").where("id", id);
-		if (access && !access.token.hasScope("admin")) {
+		if (access && (!accessData || accessData.permission_visibility !== "all")) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const iface = await query.first();
@@ -516,10 +516,10 @@ const internalWireguard = {
 	/**
 	 * Update Peering Links between WireGuard Interfaces
 	 */
-	async updateInterfaceLinks(knex, id, linkedServers, access) {
+	async updateInterfaceLinks(knex, id, linkedServers, access, accessData) {
 		// Verify ownership
 		const query = knex("wg_interface").where("id", id);
-		if (access && !access.token.hasScope("admin")) {
+		if (access && (!accessData || accessData.permission_visibility !== "all")) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const iface = await query.first();
@@ -544,10 +544,10 @@ const internalWireguard = {
 	/**
 	 * Get the WireGuard interfaces info
 	 */
-	async getInterfacesInfo(knex, access) {
+	async getInterfacesInfo(knex, access, accessData) {
 		const query = knex("wg_interface").select("*");
 		// Filter by owner if not admin
-		if (access && !access.token.hasScope("admin")) {
+		if (access && (!accessData || accessData.permission_visibility !== "all")) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const ifaces = await query;

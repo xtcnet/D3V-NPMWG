@@ -102,10 +102,23 @@ const menuItems: MenuItem[] = [
 		permissionSection: ADMIN,
 	},
 	{
-		to: "/settings",
 		icon: IconSettings,
-		label: "settings",
+		label: "tools",
 		permissionSection: ADMIN,
+		items: [
+			{
+				to: "/settings",
+				label: "settings",
+				permissionSection: ADMIN,
+				permission: VIEW,
+			},
+			{
+				to: "/database",
+				label: "database-manager",
+				permissionSection: ADMIN,
+				permission: VIEW,
+			}
+		],
 	},
 ];
 

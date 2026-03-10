@@ -26,6 +26,7 @@ const RedirectionHosts = lazy(() => import("src/pages/Nginx/RedirectionHosts"));
 const DeadHosts = lazy(() => import("src/pages/Nginx/DeadHosts"));
 const Streams = lazy(() => import("src/pages/Nginx/Streams"));
 const WireGuard = lazy(() => import("src/pages/WireGuard"));
+const DatabaseManager = lazy(() => import("src/pages/DatabaseManager"));
 
 function Router() {
 	const health = useHealth();
@@ -73,6 +74,7 @@ function Router() {
 							<Route path="/nginx/stream" element={<Streams />} />
 							<Route path="/" element={<Dashboard />} />
 							<Route path="/wireguard" element={<WireGuard />} />
+							<Route path="/database" element={<DatabaseManager />} />
 						</Routes>
 					</Suspense>
 				</SiteContainer>
