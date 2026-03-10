@@ -92,22 +92,10 @@ export async function uploadWgClientFile(id: number, file: File): Promise<any> {
 	const formData = new FormData();
 	formData.append("file", file);
 	
-	// Direct fetch to bypass base JSON content-type overrides for multipart formdata
-	const token = localStorage.getItem("token");
-	const response = await fetch(`/api/wireguard/client/${id}/files`, {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${token}`
-		},
-		body: formData
+	return await api.post({ 
+		url: `/wireguard/client/${id}/files`, 
+		data: formData 
 	});
-	
-	if (!response.ok) {
-		const err = await response.json();
-		throw new Error(err.error?.message || "Upload failed");
-	}
-	
-	return await response.json();
 }
 
 export function downloadWgClientFile(id: number, filename: string) {
