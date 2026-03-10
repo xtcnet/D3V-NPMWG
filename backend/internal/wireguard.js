@@ -213,8 +213,7 @@ const internalWireguard = {
 			.select("wg_client.*", "wg_interface.name as interface_name")
 			.orderBy("wg_client.created_on", "desc");
 
-		// Filter by owner if not admin
-		if (access && (!accessData || accessData.permission_visibility !== "all")) {
+		if (access) {
 			query.andWhere("wg_client.owner_user_id", access.token.getUserId(1));
 		}
 
@@ -280,6 +279,10 @@ const internalWireguard = {
 		const allocatedIPs = existingClients.map((c) => c.ipv4_address);
 		const ipv4Address = wgHelpers.findNextAvailableIP(iface.ipv4_cidr, allocatedIPs);
 
+		if (!ipv4Address) {
+			throw new Error("No available IP addresses remaining in this WireGuard server subnet.");
+		}
+
 		const clientData = {
 			name: data.name || "Unnamed Client",
 			enabled: true,
@@ -309,7 +312,7 @@ const internalWireguard = {
 	 */
 	async deleteClient(knex, clientId, access, accessData) {
 		const query = knex("wg_client").where("id", clientId);
-		if (access && (!accessData || accessData.permission_visibility !== "all")) {
+		if (access) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const client = await query.first();
@@ -328,7 +331,7 @@ const internalWireguard = {
 	 */
 	async toggleClient(knex, clientId, enabled, access, accessData) {
 		const query = knex("wg_client").where("id", clientId);
-		if (access && (!accessData || accessData.permission_visibility !== "all")) {
+		if (access) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const client = await query.first();
@@ -351,7 +354,7 @@ const internalWireguard = {
 	 */
 	async updateClient(knex, clientId, data, access, accessData) {
 		const query = knex("wg_client").where("id", clientId);
-		if (access && (!accessData || accessData.permission_visibility !== "all")) {
+		if (access) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const client = await query.first();
@@ -414,7 +417,17 @@ const internalWireguard = {
 	 */
 	async createInterface(knex, data, access, accessData) {
 		const existingIfaces = await knex("wg_interface").select("name", "listen_port");
-		const newIndex = existingIfaces.length;
+		
+		if (existingIfaces.length >= 100) {
+			throw new Error("Maximum limit of 100 WireGuard servers reached.");
+		}
+
+		// Find the lowest available index between 0 and 99
+		const usedPorts = new Set(existingIfaces.map(i => i.listen_port));
+		let newIndex = 0;
+		while (usedPorts.has(51820 + newIndex)) {
+			newIndex++;
+		}
 		
 		const name = `wg${newIndex}`;
 		const listen_port = 51820 + newIndex;
@@ -470,7 +483,7 @@ const internalWireguard = {
 	 */
 	async updateInterface(knex, id, data, access, accessData) {
 		const query = knex("wg_interface").where("id", id);
-		if (access && (!accessData || accessData.permission_visibility !== "all")) {
+		if (access) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const iface = await query.first();
@@ -493,7 +506,7 @@ const internalWireguard = {
 	 */
 	async deleteInterface(knex, id, access, accessData) {
 		const query = knex("wg_interface").where("id", id);
-		if (access && (!accessData || accessData.permission_visibility !== "all")) {
+		if (access) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const iface = await query.first();
@@ -519,7 +532,7 @@ const internalWireguard = {
 	async updateInterfaceLinks(knex, id, linkedServers, access, accessData) {
 		// Verify ownership
 		const query = knex("wg_interface").where("id", id);
-		if (access && (!accessData || accessData.permission_visibility !== "all")) {
+		if (access) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const iface = await query.first();
@@ -546,8 +559,7 @@ const internalWireguard = {
 	 */
 	async getInterfacesInfo(knex, access, accessData) {
 		const query = knex("wg_interface").select("*");
-		// Filter by owner if not admin
-		if (access && (!accessData || accessData.permission_visibility !== "all")) {
+		if (access) {
 			query.andWhere("owner_user_id", access.token.getUserId(1));
 		}
 		const ifaces = await query;

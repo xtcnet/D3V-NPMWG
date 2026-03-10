@@ -17,6 +17,7 @@ const internalAuditLog = {
 
 		const query = auditLogModel
 			.query()
+			.andWhere("user_id", access.token.getUserId(1))
 			.orderBy("created_on", "DESC")
 			.orderBy("id", "DESC")
 			.limit(100)
@@ -49,6 +50,7 @@ const internalAuditLog = {
 		const query = auditLogModel
 			.query()
 			.andWhere("id", data.id)
+			.andWhere("user_id", access.token.getUserId(1))
 			.allowGraph("[user]")
 			.first();
 

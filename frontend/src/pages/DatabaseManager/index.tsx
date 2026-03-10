@@ -44,10 +44,10 @@ export default function DatabaseManager() {
 		}
 	};
 
-	const renderTableData = (data: any[], schema?: any[]) => {
+	const renderTableData = (data: any[]) => {
 		if (!data || data.length === 0) return <div className="text-muted p-3">No data</div>;
-		
-		const columns = schema ? schema.map((s: any) => s.name || s.Field) : Object.keys(data[0]);
+		// In SQLite, raw SQL mapping might mismatch explicit schemas, so strictly read keys from the first row.
+		const columns = Object.keys(data[0]);
 
 		return (
 			<div className="table-responsive">
@@ -119,7 +119,7 @@ export default function DatabaseManager() {
 					<Row>
 						<Col md={3}>
 							<Card className="shadow-sm">
-								<Card.Header className="bg-light fw-bold">Tables</Card.Header>
+								<Card.Header className="bg-body-tertiary text-body fw-bold">Tables</Card.Header>
 								<div className="list-group list-group-flush" style={{ maxHeight: "70vh", overflowY: "auto" }}>
 									{tablesLoading && <div className="p-3"><Loading /></div>}
 									{tables?.map((table: string) => (
@@ -136,7 +136,7 @@ export default function DatabaseManager() {
 						</Col>
 						<Col md={9}>
 							<Card className="shadow-sm">
-								<Card.Header className="bg-light d-flex justify-content-between align-items-center">
+								<Card.Header className="bg-body-tertiary text-body d-flex justify-content-between align-items-center">
 									<h5 className="mb-0 fw-bold">{activeTable || "Select a table"}</h5>
 									{tableData && <Badge bg="secondary">{tableData.total} rows</Badge>}
 								</Card.Header>
@@ -144,7 +144,7 @@ export default function DatabaseManager() {
 									{tableDataLoading ? (
 										<div className="p-5 d-flex justify-content-center"><Loading /></div>
 									) : (
-										tableData && renderTableData(tableData.rows, tableData.schema)
+										tableData && renderTableData(tableData.rows)
 									)}
 								</Card.Body>
 							</Card>
@@ -154,7 +154,7 @@ export default function DatabaseManager() {
 
 				{activeTab === "query" && (
 					<Card className="shadow-sm">
-						<Card.Header className="bg-light fw-bold">Execute SQL Query</Card.Header>
+						<Card.Header className="bg-body-tertiary text-body fw-bold">Execute SQL Query</Card.Header>
 						<Card.Body>
 							<div className="mb-3 border rounded">
 								<CodeEditor
@@ -185,8 +185,8 @@ export default function DatabaseManager() {
 							{queryResult && (
 								<div className="mt-4">
 									<h5 className="mb-3 border-bottom pb-2">Results</h5>
-									{Array.isArray(queryResult) ? renderTableData(queryResult) : (
-										<pre className="p-3 bg-light rounded border">
+									{Array.isArray(queryResult) && queryResult.length > 0 ? renderTableData(queryResult) : (
+										<pre className="p-3 bg-body-tertiary text-body rounded border">
 											{JSON.stringify(queryResult, null, 2)}
 										</pre>
 									)}
