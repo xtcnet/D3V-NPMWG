@@ -1,17 +1,17 @@
 import {
-	IconPlus,
-	IconDownload,
-	IconQrcode,
-	IconPlayerPlay,
-	IconPlayerPause,
-	IconTrash,
-	IconNetwork,
-	IconServer,
 	IconEdit,
+	IconPlus,
+	IconQrcode,
+	IconTrash,
 	IconLink,
-	IconZip,
+	IconServer,
 	IconFolder,
 	IconNotes,
+	IconDownload,
+	IconZip,
+	IconPlayerPause,
+	IconPlayerPlay,
+	IconNetwork,
 } from "@tabler/icons-react";
 import EasyModal from "ez-modal-react";
 import { useState } from "react";
@@ -37,11 +37,17 @@ import WireGuardFileManagerModal from "src/modals/WireGuardFileManagerModal";
 import WireGuardClientEditModal from "src/modals/WireGuardClientEditModal";
 import WireGuardClientLogsModal from "src/modals/WireGuardClientLogsModal";
 
-function formatBytes(bytes: number | null): string {
-	if (bytes === null || bytes === 0) return "0 B";
+function formatBytes(bytes: number | null, unit?: string): string {
+	if (bytes === null || bytes === 0) return unit ? `0.00 ${unit}` : "0 B";
 	const k = 1024;
 	const sizes = ["B", "KB", "MB", "GB", "TB"];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	let i: number;
+	if (unit) {
+		i = sizes.indexOf(unit.toUpperCase());
+		if (i === -1) i = Math.floor(Math.log(bytes) / Math.log(k));
+	} else {
+		i = Math.floor(Math.log(bytes) / Math.log(k));
+	}
 	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
@@ -271,7 +277,7 @@ function WireGuard() {
 									<td>
 										<div className="d-flex flex-column small">
 											<span className="text-muted"><IconServer size={14} className="me-1"/> {iface.clientCount || 0} Clients</span>
-											<span className="text-muted"><IconFolder size={14} className="me-1"/> {formatBytes(iface.storageUsageBytes ?? 0)}</span>
+											<span className="text-muted"><IconFolder size={14} className="me-1"/> {formatBytes(iface.storageUsageBytes ?? 0, "GB")}</span>
 										</div>
 									</td>
 									<td>
@@ -383,13 +389,13 @@ function WireGuard() {
 					<table className="table table-vcenter table-nowrap card-table">
 						<thead>
 							<tr>
-								<th>Status</th>
-								<th>Name</th>
-								<th>Server</th>
-								<th>IP Address</th>
-								<th>Last Handshake</th>
-								<th>Traffic & Storage</th>
-								<th className="text-end">Actions</th>
+								<th className="text-muted">Status</th>
+								<th className="text-muted">Name</th>
+								<th className="text-muted">Server</th>
+								<th className="text-muted">IP Address</th>
+								<th className="text-muted">Last Handshake</th>
+								<th className="text-muted">Traffic & Storage</th>
+								<th className="text-muted text-end">Actions</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -427,9 +433,9 @@ function WireGuard() {
 										<td>{timeAgo(client.latestHandshakeAt)}</td>
 										<td>
 											<div className="d-flex flex-column text-muted small">
-												<span>↓ {formatBytes(client.transferRx)} / ↑ {formatBytes(client.transferTx)}</span>
-												<span className={client.storageLimitMb > 0 && ((client.storageUsageBytes||0) / (client.storageLimitMb * 1024 * 1024)) > 0.9 ? "text-danger" : ""}>
-													<IconFolder size={14} className="me-1"/> {formatBytes(client.storageUsageBytes || 0)} / {client.storageLimitMb === 0 ? "∞" : formatBytes(client.storageLimitMb * 1024 * 1024)}
+												<span>↓ {formatBytes(client.transferRx || 0, "GB")} / ↑ {formatBytes(client.transferTx || 0, "GB")}</span>
+												<span className={client.storageLimitMb > 0 && ((client.storageUsageBytes || 0) / (client.storageLimitMb * 1024 * 1024)) > 0.9 ? "text-danger" : ""}>
+													<IconFolder size={14} className="me-1"/> {formatBytes(client.storageUsageBytes || 0, "MB")} / {client.storageLimitMb > 0 ? formatBytes(client.storageLimitMb * 1024 * 1024, "MB") : "∞"}
 												</span>
 											</div>
 										</td>
@@ -467,57 +473,41 @@ function WireGuard() {
 												</button>
 												<button
 													type="button"
-													className="btn btn-outline-dark"
-													title="View Event Logs"
-													onClick={() =>
-														handleLogs(client)
-													}
+													className="btn btn-outline-secondary"
+													title="Event Logs"
+													onClick={() => handleLogs(client)}
 												>
 													<IconNotes size={16} />
 												</button>
 												<button
 													type="button"
-													className="btn btn-outline-primary"
+													className="btn btn-outline-success"
 													title="Download Config"
-													onClick={() =>
-														handleDownload(client.id, client.name)
-													}
+													onClick={() => handleDownload(client.id, client.name)}
 												>
 													<IconDownload size={16} />
 												</button>
 												<button
 													type="button"
-													className="btn btn-outline-primary"
-													title="Download Config + QR (ZIP)"
-													onClick={() =>
-														handleDownloadZip(client.id, client.name)
-													}
+													className="btn btn-outline-success"
+													title="Download ZIP Archive"
+													onClick={() => handleDownloadZip(client.id, client.name)}
 												>
 													<IconZip size={16} />
 												</button>
 												<button
 													type="button"
 													className={`btn ${client.enabled ? "btn-outline-warning" : "btn-outline-success"}`}
-													title={
-														client.enabled ? "Disable" : "Enable"
-													}
-													onClick={() =>
-														handleToggleClient(client.id, client.enabled)
-													}
+													title={client.enabled ? "Disable Client" : "Enable Client"}
+													onClick={() => handleToggleClient(client.id, client.enabled)}
 												>
-													{client.enabled ? (
-														<IconPlayerPause size={16} />
-													) : (
-														<IconPlayerPlay size={16} />
-													)}
+													{client.enabled ? <IconPlayerPause size={16} /> : <IconPlayerPlay size={16} />}
 												</button>
 												<button
 													type="button"
 													className="btn btn-outline-danger"
-													title="Delete"
-													onClick={() =>
-														handleDeleteClient(client.id, client.name)
-													}
+													title="Delete Client"
+													onClick={() => handleDeleteClient(client.id, client.name)}
 												>
 													<IconTrash size={16} />
 												</button>

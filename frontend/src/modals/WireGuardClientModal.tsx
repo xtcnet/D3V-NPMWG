@@ -32,8 +32,8 @@ const WireGuardClientModal = EasyModal.create(({ interfaces, defaultInterfaceId 
 				name: name.trim(),
 				interface_id: selectedInterfaceId,
 				storage_limit_mb: storageLimitMb,
-				tx_limit: txLimit,
-				rx_limit: rxLimit
+				tx_limit: txLimit * 125000,
+				rx_limit: rxLimit * 125000
 			});
 			modal.hide();
 		}
@@ -121,7 +121,7 @@ const WireGuardClientModal = EasyModal.create(({ interfaces, defaultInterfaceId 
 					<div className="row">
 						<div className="col-md-6 mb-3">
 							<label htmlFor="wg-client-tx" className="form-label">
-								Upload Bandwidth Limit (Bytes)
+								Upload Bandwidth Limit (Mbps)
 							</label>
 							<input
 								type="number"
@@ -130,13 +130,14 @@ const WireGuardClientModal = EasyModal.create(({ interfaces, defaultInterfaceId 
 								value={txLimit}
 								onChange={(e) => setTxLimit(Number(e.target.value))}
 								min="0"
+								step="1"
 								required
 							/>
 							<div className="form-text">Optional. 0 = Unlimited.</div>
 						</div>
 						<div className="col-md-6 mb-3">
 							<label htmlFor="wg-client-rx" className="form-label">
-								Download Bandwidth Limit (Bytes)
+								Download Bandwidth Limit (Mbps)
 							</label>
 							<input
 								type="number"
@@ -145,6 +146,7 @@ const WireGuardClientModal = EasyModal.create(({ interfaces, defaultInterfaceId 
 								value={rxLimit}
 								onChange={(e) => setRxLimit(Number(e.target.value))}
 								min="0"
+								step="1"
 								required
 							/>
 							<div className="form-text">Optional. 0 = Unlimited.</div>

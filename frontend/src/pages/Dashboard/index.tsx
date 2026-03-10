@@ -21,12 +21,18 @@ import {
 	VIEW,
 } from "src/modules/Permissions";
 
-function formatBytes(bytes: number | null): string {
-	if (bytes === null || bytes === 0) return "0 B";
+function formatBytes(bytes: number | null, unit?: string): string {
+	if (bytes === null || bytes === 0) return unit ? `0.00 ${unit}` : "0 B";
 	const k = 1024;
 	const sizes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
-	return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+	let i: number;
+	if (unit) {
+		i = sizes.indexOf(unit.toUpperCase());
+		if (i === -1) i = Math.floor(Math.log(bytes) / Math.log(k));
+	} else {
+		i = Math.floor(Math.log(bytes) / Math.log(k));
+	}
+	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
 const Dashboard = () => {
@@ -218,7 +224,7 @@ const Dashboard = () => {
 								<div className="d-flex align-items-center">
 									<div className="subheader">Total Storage Utilized</div>
 								</div>
-								<div className="h1 mb-3">{formatBytes(wgStats?.totalStorageBytes || 0)}</div>
+								<div className="h1 mb-3">{((wgStats?.totalStorageBytes || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB</div>
 								<div className="d-flex mb-2">
 									<div className="text-muted small"><IconFolder size={14} className="me-1"/> Encrypted Partition Capacity</div>
 								</div>
@@ -231,10 +237,10 @@ const Dashboard = () => {
 								<div className="d-flex align-items-center">
 									<div className="subheader">Global Traffic Transfer</div>
 								</div>
-								<div className="h1 mb-3 text-blue">{formatBytes((wgStats?.totalTransferRx || 0) + (wgStats?.totalTransferTx || 0))}</div>
+								<div className="h1 mb-3 text-blue">{formatBytes((wgStats?.totalTransferRx || 0) + (wgStats?.totalTransferTx || 0), "GB")}</div>
 								<div className="d-flex mb-2">
 									<div className="text-muted small">
-										↓ {formatBytes(wgStats?.totalTransferRx || 0)} | ↑ {formatBytes(wgStats?.totalTransferTx || 0)}
+										↓ {formatBytes(wgStats?.totalTransferRx || 0, "GB")} | ↑ {formatBytes(wgStats?.totalTransferTx || 0, "GB")}
 									</div>
 								</div>
 							</div>

@@ -13,11 +13,17 @@ interface Props {
 	ipv4Address: string;
 }
 
-function formatBytes(bytes: number | null): string {
-	if (bytes === null || bytes === 0) return "0 B";
+function formatBytes(bytes: number | null, unit?: string): string {
+	if (bytes === null || bytes === 0) return unit ? `0.00 ${unit}` : "0 B";
 	const k = 1024;
 	const sizes = ["B", "KB", "MB", "GB", "TB"];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	let i: number;
+	if (unit) {
+		i = sizes.indexOf(unit.toUpperCase());
+		if (i === -1) i = Math.floor(Math.log(bytes) / Math.log(k));
+	} else {
+		i = Math.floor(Math.log(bytes) / Math.log(k));
+	}
 	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 

@@ -39,13 +39,9 @@ router.get("/dashboard", async (req, res, next) => {
 	try {
 		const knex = db();
 		const access = res.locals.access;
-		const accessData = await access.can("proxy_hosts:get");
+		const accessData = await access.can("proxy_hosts:list");
 		
-		const query = knex("wg_client").select("*");
-		if (accessData.permission_visibility !== "all") {
-			query.where("owner_user_id", access.token.getUserId(1));
-		}
-		const clients = await query;
+		const clients = await internalWireguard.getClients(knex, access, accessData);
 		
 		let totalStorageBytes = 0;
 		let totalTransferRx = 0;
@@ -61,14 +57,20 @@ router.get("/dashboard", async (req, res, next) => {
 			try {
 				totalStorageBytes += await internalWireguardFs.getClientStorageUsage(client.ipv4_address);
 			} catch (_) {}
-			totalTransferRx += Number(client.transfer_rx || 0);
-			totalTransferTx += Number(client.transfer_tx || 0);
+			
+			totalTransferRx += parseInt(client.transfer_rx || 0, 10);
+			totalTransferTx += parseInt(client.transfer_tx || 0, 10);
 			
 			if (client.latest_handshake_at) {
-				const handshake = new Date(client.latest_handshake_at).getTime();
-				if (now - handshake <= DAY) online24h++;
-				if (now - handshake <= 7 * DAY) online7d++;
-				if (now - handshake <= 30 * DAY) online30d++;
+				const handshakeStr = String(client.latest_handshake_at);
+				let handshakeTime = Date.parse(handshakeStr);
+				
+				// Handle 0 or invalid epoch
+				if (handshakeTime > 0) {
+					if (now - handshakeTime <= DAY) online24h++;
+					if (now - handshakeTime <= 7 * DAY) online7d++;
+					if (now - handshakeTime <= 30 * DAY) online30d++;
+				}
 			}
 		}
 		

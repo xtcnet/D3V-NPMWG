@@ -1,12 +1,18 @@
 import { useState, useEffect } from "react";
 import { IconShieldLock, IconNetwork, IconApi, IconFolders } from "@tabler/icons-react";
 
-function formatBytes(bytes: number | null): string {
-    if (!bytes) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+function formatBytes(bytes: number | null, unit?: string): string {
+	if (bytes === null || bytes === 0) return unit ? `0.00 ${unit}` : "0 B";
+	const k = 1024;
+	const sizes = ["B", "KB", "MB", "GB", "TB"];
+	let i: number;
+	if (unit) {
+		i = sizes.indexOf(unit.toUpperCase());
+		if (i === -1) i = Math.floor(Math.log(bytes) / Math.log(k));
+	} else {
+		i = Math.floor(Math.log(bytes) / Math.log(k));
+	}
+	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
 export default function WgPublicPortal() {

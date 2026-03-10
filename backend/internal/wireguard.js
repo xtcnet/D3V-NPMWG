@@ -29,9 +29,13 @@ const internalWireguard = {
 	async getOrCreateInterface(knex) {
 		let iface = await knex("wg_interface").first();
 		if (!iface) {
+			const privateKey = await wgHelpers.generatePrivateKey();
+			const publicKey = await wgHelpers.getPublicKey(privateKey);
 			// Seed a default config if it doesn't exist
 			const insertData = {
 				name: "wg0",
+				private_key: privateKey,
+				public_key: publicKey,
 				listen_port: 51820,
 				ipv4_cidr: "10.0.0.1/24",
 				mtu: 1420,

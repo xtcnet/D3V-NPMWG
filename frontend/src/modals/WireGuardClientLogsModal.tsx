@@ -24,8 +24,22 @@ const WireGuardClientLogsModal = EasyModal.create(({ clientId, clientName }: Pro
 	};
 
 	const formatDate = (dateString: string) => {
-		const d = new Date(dateString);
-		return d.toLocaleString();
+		try {
+			// Ensure UTC parsing from raw SQLite timestamp
+			const d = new Date(dateString.endsWith('Z') ? dateString : dateString + 'Z');
+			return isNaN(d.getTime()) ? dateString : d.toLocaleString();
+		} catch {
+			return dateString;
+		}
+	};
+
+	const parseLogMeta = (metaString: string | any) => {
+		try {
+			const meta = typeof metaString === 'string' ? JSON.parse(metaString) : metaString;
+			return meta?.message || typeof meta === 'string' ? meta : JSON.stringify(meta);
+		} catch {
+			return String(metaString);
+		}
 	};
 
 	const getActionBadge = (action: string) => {
@@ -75,7 +89,7 @@ const WireGuardClientLogsModal = EasyModal.create(({ clientId, clientName }: Pro
 											</td>
 											<td>{getActionBadge(log.action)}</td>
 											<td className="small text-muted text-wrap">
-												{log.meta && log.meta.message ? log.meta.message : JSON.stringify(log.meta)}
+												{parseLogMeta(log.meta)}
 											</td>
 										</tr>
 									))

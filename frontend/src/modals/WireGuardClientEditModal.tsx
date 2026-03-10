@@ -12,8 +12,8 @@ const WireGuardClientEditModal = EasyModal.create(({ client }: WireGuardClientEd
 	const modal = useModal<any>();
 	const [name, setName] = useState(client.name);
 	const [storageLimitMb, setStorageLimitMb] = useState<number>(client.storageLimitMb ?? 500);
-	const [txLimit, setTxLimit] = useState<number>(client.txLimit ?? 0);
-	const [rxLimit, setRxLimit] = useState<number>(client.rxLimit ?? 0);
+	const [txLimit, setTxLimit] = useState<number>(client.txLimit ? client.txLimit / 125000 : 0);
+	const [rxLimit, setRxLimit] = useState<number>(client.rxLimit ? client.rxLimit / 125000 : 0);
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
@@ -21,8 +21,8 @@ const WireGuardClientEditModal = EasyModal.create(({ client }: WireGuardClientEd
 			modal.resolve({ 
 				name: name.trim(),
 				storage_limit_mb: storageLimitMb,
-				tx_limit: txLimit,
-				rx_limit: rxLimit
+				tx_limit: txLimit * 125000,
+				rx_limit: rxLimit * 125000
 			});
 			modal.hide();
 		}
@@ -81,7 +81,7 @@ const WireGuardClientEditModal = EasyModal.create(({ client }: WireGuardClientEd
 					<div className="row">
 						<div className="col-md-6 mb-3">
 							<label htmlFor="wg-edit-tx" className="form-label">
-								Upload Bandwidth Limit (Bytes)
+								Upload Bandwidth Limit (Mbps)
 							</label>
 							<input
 								type="number"
@@ -90,13 +90,14 @@ const WireGuardClientEditModal = EasyModal.create(({ client }: WireGuardClientEd
 								value={txLimit}
 								onChange={(e) => setTxLimit(Number(e.target.value))}
 								min="0"
+								step="1"
 								required
 							/>
 							<div className="form-text">0 = Unlimited.</div>
 						</div>
 						<div className="col-md-6 mb-3">
 							<label htmlFor="wg-edit-rx" className="form-label">
-								Download Bandwidth Limit (Bytes)
+								Download Bandwidth Limit (Mbps)
 							</label>
 							<input
 								type="number"
@@ -105,6 +106,7 @@ const WireGuardClientEditModal = EasyModal.create(({ client }: WireGuardClientEd
 								value={rxLimit}
 								onChange={(e) => setRxLimit(Number(e.target.value))}
 								min="0"
+								step="1"
 								required
 							/>
 							<div className="form-text">0 = Unlimited.</div>
