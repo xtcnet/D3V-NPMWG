@@ -83,3 +83,37 @@ export function downloadWgConfig(id: number, name: string) {
 export function downloadWgConfigZip(id: number, name: string) {
 	return api.download({ url: `/wireguard/client/${id}/configuration.zip` }, `${name}.zip`);
 }
+
+export async function getWgClientFiles(id: number): Promise<any[]> {
+	return await api.get({ url: `/wireguard/client/${id}/files` });
+}
+
+export async function uploadWgClientFile(id: number, file: File): Promise<any> {
+	const formData = new FormData();
+	formData.append("file", file);
+	
+	// Direct fetch to bypass base JSON content-type overrides for multipart formdata
+	const token = localStorage.getItem("token");
+	const response = await fetch(`/api/wireguard/client/${id}/files`, {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${token}`
+		},
+		body: formData
+	});
+	
+	if (!response.ok) {
+		const err = await response.json();
+		throw new Error(err.error?.message || "Upload failed");
+	}
+	
+	return await response.json();
+}
+
+export function downloadWgClientFile(id: number, filename: string) {
+	return api.download({ url: `/wireguard/client/${id}/files/${encodeURIComponent(filename)}` }, filename);
+}
+
+export async function deleteWgClientFile(id: number, filename: string): Promise<boolean> {
+	return await api.del({ url: `/wireguard/client/${id}/files/${encodeURIComponent(filename)}` });
+}

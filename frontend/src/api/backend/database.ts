@@ -12,10 +12,3 @@ export async function getTableData(tableName: string, offset: number = 0, limit:
         params: { offset, limit },
     });
 }
-
-export async function executeQuery(query: string): Promise<any> {
-    return await api.post({
-        url: "/database/query",
-        data: { query },
-    });
-}

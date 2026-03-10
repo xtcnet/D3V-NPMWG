@@ -60,23 +60,4 @@ router.get("/tables/:name", async (req, res, next) => {
 	}
 });
 
-/**
- * POST /api/database/query
- * Execute a raw SQL query
- */
-router.post("/query", async (req, res, next) => {
-	try {
-		if (!req.body || !req.body.query) {
-			return res.status(400).json({ error: { message: "Query is required" } });
-		}
-		
-		const result = await internalDatabase.executeQuery(req.body.query);
-		res.status(200).json(result);
-	} catch (err) {
-		debug(logger, `POST ${req.path} error: ${err.message}`);
-		// We want to return SQL errors cleanly to the UI, not throw a 500 error page
-		res.status(400).json({ error: { message: err.message, sql: true } });
-	}
-});
-
 export default router;

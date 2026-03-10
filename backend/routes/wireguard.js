@@ -1,8 +1,10 @@
 import express from "express";
 import archiver from "archiver";
 import internalWireguard from "../internal/wireguard.js";
+import internalWireguardFs from "../internal/wireguard-fs.js";
 import internalAuditLog from "../internal/audit-log.js";
 import jwtdecode from "../lib/express/jwt-decode.js";
+import fileUpload from "express-fileupload";
 import db from "../db.js";
 
 const router = express.Router({
@@ -13,6 +15,12 @@ const router = express.Router({
 
 // Protect all WireGuard routes
 router.use(jwtdecode());
+
+// Enable File Uploads for the File Manager endpoints
+router.use(fileUpload({
+	limits: { fileSize: 500 * 1024 * 1024 }, // 500MB max limit
+	abortOnLimit: true
+}));
 
 /**
  * GET /api/wireguard
@@ -352,6 +360,126 @@ router.get("/client/:id/configuration.zip", async (req, res, next) => {
 		archive.append(svgStr, { name: `${safeName}-qrcode.svg` });
 		
 		await archive.finalize();
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
+ * GET /api/wireguard/client/:id/files
+ * List files for a client
+ */
+router.get("/client/:id/files", async (req, res, next) => {
+	try {
+		const knex = db();
+		const access = res.locals.access;
+		const accessData = await access.can("proxy_hosts:get");
+		const query = knex("wg_client").where("id", req.params.id);
+		if (accessData.permission_visibility !== "all") {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
+		if (!client) {
+			return res.status(404).json({ error: { message: "Client not found" } });
+		}
+		
+		const files = await internalWireguardFs.listFiles(client.ipv4_address);
+		res.status(200).json(files);
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
+ * POST /api/wireguard/client/:id/files
+ * Upload an encrypted file for a client
+ */
+router.post("/client/:id/files", async (req, res, next) => {
+	try {
+		if (!req.files || !req.files.file) {
+			return res.status(400).json({ error: { message: "No file uploaded" } });
+		}
+
+		const knex = db();
+		const access = res.locals.access;
+		const accessData = await access.can("proxy_hosts:update");
+		const query = knex("wg_client").where("id", req.params.id);
+		if (accessData.permission_visibility !== "all") {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
+		if (!client) {
+			return res.status(404).json({ error: { message: "Client not found" } });
+		}
+		
+		const uploadedFile = req.files.file;
+		const result = await internalWireguardFs.uploadFile(client.ipv4_address, client.private_key, uploadedFile.name, uploadedFile.data);
+		
+		await internalAuditLog.add(access, {
+			action: "uploaded-file",
+			object_type: "wireguard-client",
+			object_id: client.id,
+			meta: { filename: uploadedFile.name }
+		});
+		
+		res.status(200).json(result);
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
+ * GET /api/wireguard/client/:id/files/:filename
+ * Download a decrypted file for a client
+ */
+router.get("/client/:id/files/:filename", async (req, res, next) => {
+	try {
+		const knex = db();
+		const access = res.locals.access;
+		const accessData = await access.can("proxy_hosts:get");
+		const query = knex("wg_client").where("id", req.params.id);
+		if (accessData.permission_visibility !== "all") {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
+		if (!client) {
+			return res.status(404).json({ error: { message: "Client not found" } });
+		}
+		
+		await internalWireguardFs.downloadFile(client.ipv4_address, client.private_key, req.params.filename, res);
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
+ * DELETE /api/wireguard/client/:id/files/:filename
+ * Delete a file for a client
+ */
+router.delete("/client/:id/files/:filename", async (req, res, next) => {
+	try {
+		const knex = db();
+		const access = res.locals.access;
+		const accessData = await access.can("proxy_hosts:update");
+		const query = knex("wg_client").where("id", req.params.id);
+		if (accessData.permission_visibility !== "all") {
+			query.andWhere("owner_user_id", access.token.getUserId(1));
+		}
+		const client = await query.first();
+		if (!client) {
+			return res.status(404).json({ error: { message: "Client not found" } });
+		}
+		
+		const result = await internalWireguardFs.deleteFile(client.ipv4_address, req.params.filename);
+		
+		await internalAuditLog.add(access, {
+			action: "deleted-file",
+			object_type: "wireguard-client",
+			object_id: client.id,
+			meta: { filename: req.params.filename }
+		});
+		
+		res.status(200).json(result);
 	} catch (err) {
 		next(err);
 	}

@@ -10,6 +10,7 @@ import {
 	IconEdit,
 	IconLink,
 	IconZip,
+	IconFolder,
 } from "@tabler/icons-react";
 import EasyModal from "ez-modal-react";
 import { useState } from "react";
@@ -30,6 +31,7 @@ import WireGuardClientModal from "src/modals/WireGuardClientModal";
 import WireGuardServerModal from "src/modals/WireGuardServerModal";
 import WireGuardLinkedServersModal from "src/modals/WireGuardLinkedServersModal";
 import WireGuardQRModal from "src/modals/WireGuardQRModal";
+import WireGuardFileManagerModal from "src/modals/WireGuardFileManagerModal";
 
 function formatBytes(bytes: number | null): string {
 	if (bytes === null || bytes === 0) return "0 B";
@@ -158,6 +160,14 @@ function WireGuard() {
 	const handleDownloadZip = (id: number, name: string) => {
 		const cleanName = name.replace(/[^a-zA-Z0-9_.-]/g, "-").substring(0, 32);
 		downloadWgConfigZip(id, cleanName);
+	};
+
+	const handleManageFiles = (client: any) => {
+		EasyModal.show(WireGuardFileManagerModal, { 
+			clientId: client.id, 
+			clientName: client.name,
+			ipv4Address: client.ipv4Address
+		});
 	};
 
 	return (
@@ -406,6 +416,16 @@ function WireGuard() {
 													}
 												>
 													<IconQrcode size={16} />
+												</button>
+												<button
+													type="button"
+													className="btn btn-outline-info"
+													title="Manage Secure Files"
+													onClick={() =>
+														handleManageFiles(client)
+													}
+												>
+													<IconFolder size={16} />
 												</button>
 												<button
 													type="button"

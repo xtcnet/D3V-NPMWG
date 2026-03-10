@@ -60,21 +60,6 @@ const internalDatabase = {
 			total,
 			rows
 		};
-	},
-
-	/**
-	 * Execute raw SQL query directly
-	 */
-	async executeQuery(queryStr) {
-		const knex = db();
-		
-		// Run raw query. This is dangerous and assumes the user knows what they're doing.
-		const result = await knex.raw(queryStr);
-		
-		return {
-			query: queryStr,
-			result: result
-		};
 	}
 };
 
