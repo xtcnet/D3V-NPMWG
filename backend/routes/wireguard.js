@@ -4,7 +4,6 @@ import internalWireguard from "../internal/wireguard.js";
 import internalWireguardFs from "../internal/wireguard-fs.js";
 import internalAuditLog from "../internal/audit-log.js";
 import jwtdecode from "../lib/express/jwt-decode.js";
-import fileUpload from "express-fileupload";
 import db from "../db.js";
 
 const router = express.Router({
@@ -15,12 +14,6 @@ const router = express.Router({
 
 // Protect all WireGuard routes
 router.use(jwtdecode());
-
-// Enable File Uploads for the File Manager endpoints
-router.use(fileUpload({
-	limits: { fileSize: 500 * 1024 * 1024 }, // 500MB max limit
-	abortOnLimit: true
-}));
 
 /**
  * GET /api/wireguard

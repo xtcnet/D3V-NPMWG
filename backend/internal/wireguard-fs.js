@@ -67,11 +67,22 @@ export default {
 		const iv = crypto.randomBytes(16);
 		const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
 
-		// We will write the IV to the very beginning of the file, followed by encrypted data
-		const encryptedBuffer = Buffer.concat([iv, cipher.update(fileBuffer), cipher.final()]);
-		
-		await fs.promises.writeFile(filePath, encryptedBuffer);
-		return { success: true, name: safeFilename };
+		return new Promise((resolve, reject) => {
+			const writeStream = fs.createWriteStream(filePath);
+			
+			writeStream.on("error", (err) => reject(err));
+			writeStream.on("finish", () => resolve({ success: true, name: safeFilename }));
+
+			// Write the 16-byte IV first
+			writeStream.write(iv);
+
+			// Pipe the cipher output to the file
+			cipher.pipe(writeStream);
+
+			// Write the actual file buffer into the cipher
+			cipher.write(fileBuffer);
+			cipher.end();
+		});
 	},
 
 	/**
