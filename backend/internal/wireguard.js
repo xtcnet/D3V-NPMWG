@@ -65,16 +65,21 @@ const internalWireguard = {
 		basePostUp.push("iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE");
 		basePostDown.push("iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE");
 
-		// Client Isolation: Prevent clients on this interface from communicating with each other
+		// Server Isolation: drop cross-server traffic by default.
+		// Uses -I to insert at position 1, before the ACCEPT rules above.
+		basePostUp.push("iptables -I FORWARD -i %i -o wg+ -j DROP");
+		basePostDown.push("iptables -D FORWARD -i %i -o wg+ -j DROP");
+
+		// Same-interface rule: inserted AFTER the DROP above so it lands at position 1,
+		// placing it BEFORE the wg+ DROP in the chain.
+		// This ensures client-to-client traffic on this interface is evaluated first.
 		if (iface.isolate_clients) {
 			basePostUp.push("iptables -I FORWARD -i %i -o %i -j REJECT");
 			basePostDown.push("iptables -D FORWARD -i %i -o %i -j REJECT");
+		} else {
+			basePostUp.push("iptables -I FORWARD -i %i -o %i -j ACCEPT");
+			basePostDown.push("iptables -D FORWARD -i %i -o %i -j ACCEPT");
 		}
-
-		// Server Isolation (Default DROP) & Server Peering
-		// 1. By default, prevent this interface from talking to ANY OTHER wg+ interfaces
-		basePostUp.push("iptables -I FORWARD -i %i -o wg+ -j DROP");
-		basePostDown.push("iptables -D FORWARD -i %i -o wg+ -j DROP");
 
 		// 2. Fetch linked servers to punch holes in the DROP rule
 		// wg_server_link has interface_id_1 and interface_id_2
@@ -646,12 +651,15 @@ const internalWireguard = {
 	 */
 	async syncIptablesRules(iface) {
 		const name = iface.name;
-		// Remove existing rule first (idempotent — suppress error if rule doesn't exist)
+		// Remove both possible same-interface rules first (idempotent)
 		await execAsync(`iptables -D FORWARD -i ${name} -o ${name} -j REJECT 2>/dev/null || true`);
+		await execAsync(`iptables -D FORWARD -i ${name} -o ${name} -j ACCEPT 2>/dev/null || true`);
+		// Re-insert at position 1 so it appears before the wg+ DROP rule in the chain
 		if (iface.isolate_clients) {
 			await execAsync(`iptables -I FORWARD -i ${name} -o ${name} -j REJECT`);
 			logger.info(`Client isolation enabled for ${name}`);
 		} else {
+			await execAsync(`iptables -I FORWARD -i ${name} -o ${name} -j ACCEPT`);
 			logger.info(`Client isolation disabled for ${name}`);
 		}
 	},
