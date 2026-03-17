@@ -4,8 +4,18 @@ on:
   push:
     branches: [ "master" ]
     tags: [ 'v*.*.*' ]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker/**'
+      - '.github/workflows/docker-publish.yml'
   pull_request:
     branches: [ "master" ]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker/**'
+      - '.github/workflows/docker-publish.yml'
 
 env:
   REGISTRY: ghcr.io
