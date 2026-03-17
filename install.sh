@@ -145,7 +145,7 @@ generate_docker_compose() {
     fi
 
     log_step "Generating docker-compose.yml..."
-    
+
     local custom_ports_block=""
     if [ -f ".custom_ports" ]; then
         while IFS= read -r port_mapping; do
@@ -153,6 +153,18 @@ generate_docker_compose() {
             [[ -z "$port_mapping" || "$port_mapping" =~ ^# ]] && continue
             custom_ports_block+="      - \"${port_mapping}\"\n"
         done < ".custom_ports"
+    fi
+
+    # Only include d3v-net if the network already exists (i.e. Forgejo is installed)
+    local network_block=""
+    if docker network ls --format '{{.Name}}' 2>/dev/null | grep -q "^${DOCKER_NETWORK}$"; then
+        network_block="    networks:
+      - d3v-net
+
+networks:
+  d3v-net:
+    external: true
+    name: ${DOCKER_NETWORK}"
     fi
 
     cat > "$COMPOSE_FILE" <<YAML
@@ -178,13 +190,7 @@ $(echo -e "$custom_ports_block" | sed '/^$/d')    volumes:
       - ./wireguard:/etc/wireguard
     environment:
       WG_HOST: "${host}"
-    networks:
-      - d3v-net
-
-networks:
-  d3v-net:
-    external: true
-    name: ${DOCKER_NETWORK}
+${network_block}
 YAML
     log_ok "docker-compose.yml created/updated."
 }
