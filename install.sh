@@ -321,33 +321,35 @@ do_reset_password() {
         return
     fi
 
-    read -rp "$(echo -e "${CYAN}[?]${NC} New admin email [admin@example.com]: ")" new_email
-    new_email="${new_email:-admin@example.com}"
-
-    read -rsp "$(echo -e "${CYAN}[?]${NC} New password [changeme]: ")" new_pass
+    read -rsp "$(echo -e "${CYAN}[?]${NC} New password: ")" new_pass
     echo ""
-    new_pass="${new_pass:-changeme}"
+    if [ -z "$new_pass" ]; then
+        log_err "Password cannot be empty. Cancelled."
+        return
+    fi
 
-    log_step "Resetting admin credentials inside container..."
+    log_step "Resetting admin password..."
 
-    docker exec "$CONTAINER_NAME" node -e "
+    local result
+    result=$(docker exec "$CONTAINER_NAME" node -e "
         import('bcrypt').then(async bcrypt => {
+            const knex = (await import('/app/db.js')).default();
+            const user = await knex('user').where('is_deleted', 0).orderBy('id', 'asc').first();
+            if (!user) { console.error('NO_USER'); process.exit(2); }
             const hash = await bcrypt.hash('${new_pass}', 13);
-            const knex = (await import('/app/db.js')).default;
-            await knex('auth').where('user_id', 1).update({ secret: hash });
-            await knex('user').where('id', 1).update({ email: '${new_email}', is_deleted: 0, is_disabled: 0 });
-            console.log('OK');
+            await knex('auth').where('user_id', user.id).update({ secret: hash });
+            await knex('user').where('id', user.id).update({ is_disabled: 0 });
+            console.log(user.email);
             process.exit(0);
-        }).catch(e => { console.error(e); process.exit(1); });
-    "
+        }).catch(e => { console.error(e.message); process.exit(1); });
+    " 2>&1)
 
-    if [ $? -eq 0 ]; then
-        log_ok "Credentials updated."
-        echo -e "  Email    : ${BOLD}${new_email}${NC}"
-        echo -e "  Password : ${BOLD}${new_pass}${NC}"
-        log_warn "Please change your password after logging in."
+    local exit_code=$?
+    if [ $exit_code -eq 0 ]; then
+        log_ok "Password updated successfully."
+        echo -e "  Email    : ${BOLD}${result}${NC}"
     else
-        log_err "Failed to reset password. Check container logs."
+        log_err "Failed to reset password: ${result}"
     fi
 }
 
