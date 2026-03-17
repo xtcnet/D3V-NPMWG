@@ -145,8 +145,11 @@ const internalWireguard = {
 			try {
 				await wgHelpers.wgSync(iface.name);
 				logger.info(`WireGuard config synced for ${iface.name}`);
-				
-				// 6. Apply traffic control bandwidth partitions non-blocking
+
+				// 6. Apply iptables isolation rule directly (wg syncconf does not run PostUp/PostDown)
+				await this.syncIptablesRules(iface);
+
+				// 7. Apply traffic control bandwidth partitions non-blocking
 				this.applyBandwidthLimits(knex, iface).catch((e) => logger.warn(`Skipping QoS on ${iface.name}: ${e.message}`));
 			} catch (err) {
 				logger.warn(`WireGuard sync failed for ${iface.name}, may need full restart:`, err.message);
@@ -635,6 +638,22 @@ const internalWireguard = {
 			});
 		}
 		return result;
+	},
+
+	/**
+	 * Apply or remove the client isolation iptables rule for an interface.
+	 * Called after every wg syncconf because PostUp/PostDown are not re-executed by syncconf.
+	 */
+	async syncIptablesRules(iface) {
+		const name = iface.name;
+		// Remove existing rule first (idempotent — suppress error if rule doesn't exist)
+		await execAsync(`iptables -D FORWARD -i ${name} -o ${name} -j REJECT 2>/dev/null || true`);
+		if (iface.isolate_clients) {
+			await execAsync(`iptables -I FORWARD -i ${name} -o ${name} -j REJECT`);
+			logger.info(`Client isolation enabled for ${name}`);
+		} else {
+			logger.info(`Client isolation disabled for ${name}`);
+		}
 	},
 
 	/**
