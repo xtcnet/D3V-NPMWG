@@ -707,6 +707,12 @@ do_forgejo_uninstall() {
     log_step "Removing ${FORGEJO_INSTALL_DIR}..."
     rm -rf "$FORGEJO_INSTALL_DIR"
     log_ok "Forgejo uninstalled."
+
+    log_step "Unblocking ports 3000 and 2222..."
+    iptables -D DOCKER-USER -p tcp --dport 3000 -j DROP 2>/dev/null || true
+    iptables -D DOCKER-USER -p tcp --dport 2222 -j DROP 2>/dev/null || true
+    log_ok "Ports 3000 and 2222 unblocked."
+    save_iptables_rules
 }
 
 do_forgejo_update() {
