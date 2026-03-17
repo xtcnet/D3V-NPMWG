@@ -615,35 +615,43 @@ YAML
     if docker ps --format '{{.Names}}' | grep -q "^${FORGEJO_CONTAINER_NAME}$"; then
         local server_ip
         server_ip=$(hostname -I | awk '{print $1}')
+
+        # Block direct external access to port 3000 (accessible via NPM proxy only)
+        log_step "Blocking external access to port 3000..."
+        iptables -D DOCKER-USER -p tcp --dport 3000 -j DROP 2>/dev/null || true
+        iptables -I DOCKER-USER -p tcp --dport 3000 -j DROP
+        log_ok "Port 3000 is now private (NPM proxy only)."
+
         echo ""
         separator
         echo -e "${GREEN}${BOLD}   FORGEJO INSTALLED SUCCESSFULLY!${NC}"
         separator
-        echo -e "  ${CYAN}Forgejo Web UI${NC} : ${BOLD}http://${server_ip}:3000${NC}"
-        echo -e "  ${CYAN}Git SSH${NC}        : ${BOLD}ssh://git@${server_ip}:2222${NC}"
+        echo -e "  ${CYAN}Git SSH${NC}  : ${BOLD}ssh://git@${server_ip}:2222${NC}"
+        echo -e "  ${CYAN}Git HTTPS${NC}: via NPM proxy after hostname setup below"
         echo ""
         separator
-        echo -e "${BOLD}  Thêm hostname trong Nginx Proxy Manager${NC}"
+        echo -e "${BOLD}  Add Hostname in Nginx Proxy Manager${NC}"
         separator
-        echo -e "  ${YELLOW}Bước 1:${NC} Mở Admin UI tại ${BOLD}http://${server_ip}:81${NC}"
+        echo -e "  ${YELLOW}Step 1:${NC} Open NPM Admin UI at ${BOLD}http://${server_ip}:81${NC}"
         echo ""
-        echo -e "  ${YELLOW}Bước 2:${NC} Vào ${BOLD}Proxy Hosts${NC} → nhấn ${BOLD}Add Proxy Host${NC}"
+        echo -e "  ${YELLOW}Step 2:${NC} Go to ${BOLD}Proxy Hosts${NC} → click ${BOLD}Add Proxy Host${NC}"
         echo ""
-        echo -e "  ${YELLOW}Bước 3:${NC} Tab ${BOLD}Details${NC} — điền thông tin:"
-        echo -e "    Domain Names      : ${CYAN}git.yourdomain.com${NC}"
-        echo -e "    Scheme            : ${CYAN}http${NC}"
-        echo -e "    Forward Hostname  : ${CYAN}forgejo${NC}   ← tên container"
-        echo -e "    Forward Port      : ${CYAN}3000${NC}"
-        echo -e "    ☑ Cache Assets    ☑ Block Common Exploits"
+        echo -e "  ${YELLOW}Step 3:${NC} ${BOLD}Details${NC} tab:"
+        echo -e "    Domain Names     : ${CYAN}git.yourdomain.com${NC}"
+        echo -e "    Scheme           : ${CYAN}http${NC}"
+        echo -e "    Forward Hostname : ${CYAN}forgejo${NC}   (container name)"
+        echo -e "    Forward Port     : ${CYAN}3000${NC}"
+        echo -e "    [x] Cache Assets   [x] Block Common Exploits"
         echo ""
-        echo -e "  ${YELLOW}Bước 4:${NC} Tab ${BOLD}SSL${NC} → chọn ${BOLD}Request a new SSL Certificate${NC}"
-        echo -e "    ☑ Force SSL   ☑ HTTP/2 Support"
+        echo -e "  ${YELLOW}Step 4:${NC} ${BOLD}SSL${NC} tab → select ${BOLD}Request a new SSL Certificate${NC}"
+        echo -e "    [x] Force SSL   [x] HTTP/2 Support"
         echo ""
-        echo -e "  ${YELLOW}Bước 5:${NC} Nhấn ${BOLD}Save${NC}."
+        echo -e "  ${YELLOW}Step 5:${NC} Click ${BOLD}Save${NC}."
         echo ""
-        echo -e "  ${YELLOW}Bước 6:${NC} Mở ${BOLD}http://${server_ip}:3000${NC} → hoàn tất Forgejo setup"
-        echo -e "    Server Domain     : ${CYAN}git.yourdomain.com${NC}"
-        echo -e "    Base URL (ROOT_URL): ${CYAN}https://git.yourdomain.com${NC}"
+        echo -e "  ${YELLOW}Step 6:${NC} Open ${BOLD}https://git.yourdomain.com${NC} → complete Forgejo setup"
+        echo -e "    Server Domain    : ${CYAN}git.yourdomain.com${NC}"
+        echo -e "    Base URL         : ${CYAN}https://git.yourdomain.com${NC}"
+        echo -e "    SSH Port         : ${CYAN}2222${NC}"
         separator
     else
         log_err "Forgejo did not start. Check: docker logs ${FORGEJO_CONTAINER_NAME}"
