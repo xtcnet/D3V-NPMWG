@@ -198,6 +198,16 @@ export default function Login() {
 					</div>
 				</div>
 				<div className="text-center text-secondary mt-3">{getVersion()}</div>
+				<div className="text-center mt-3">
+					<a
+						href={`http://${window.location.hostname}`}
+						className="btn btn-outline-secondary btn-sm"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						Open xGat3
+					</a>
+				</div>
 			</div>
 		</Page>
 	);
