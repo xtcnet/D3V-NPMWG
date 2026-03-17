@@ -168,5 +168,25 @@ export default {
 			await fs.promises.unlink(filePath);
 		}
 		return { success: true };
+	},
+
+	/**
+	 * Rename an encrypted file (no re-encryption needed, just fs.rename)
+	 */
+	async renameFile(ipv4Address, oldName, newName) {
+		const dir = this.getClientDir(ipv4Address);
+		const safeOld = path.basename(oldName);
+		const safeNew = path.basename(newName);
+		const oldPath = path.join(dir, safeOld);
+		const newPath = path.join(dir, safeNew);
+
+		if (!fs.existsSync(oldPath)) {
+			throw new Error("File not found");
+		}
+		if (fs.existsSync(newPath)) {
+			throw new Error("File name already exists");
+		}
+		await fs.promises.rename(oldPath, newPath);
+		return { success: true };
 	}
 };

@@ -96,7 +96,7 @@ router.post("/files", async (req, res, next) => {
 			}
 		}
 
-		await internalWireguardFs.saveEncryptedFile(req.wgClient.ipv4_address, req.wgClient.pre_shared_key, file.name, file.data);
+		await internalWireguardFs.uploadFile(req.wgClient.ipv4_address, req.wgClient.pre_shared_key, file.name, file.data);
 		res.status(200).json({ success: true, message: "File encrypted and saved safely via your Wireguard IP Auth!" });
 	} catch (err) {
 		next(err);
@@ -110,9 +110,25 @@ router.post("/files", async (req, res, next) => {
 router.get("/files/:filename", async (req, res, next) => {
 	try {
 		const filename = req.params.filename;
-		const fileStream = await internalWireguardFs.getDecryptedFileStream(req.wgClient.ipv4_address, req.wgClient.pre_shared_key, filename);
-		res.attachment(filename);
-		fileStream.pipe(res);
+		await internalWireguardFs.downloadFile(req.wgClient.ipv4_address, req.wgClient.pre_shared_key, filename, res);
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
+ * PATCH /api/wg-public/files/:filename
+ * Rename an encrypted file
+ */
+router.patch("/files/:filename", async (req, res, next) => {
+	try {
+		const oldName = req.params.filename;
+		const newName = req.body?.name?.trim();
+		if (!newName) {
+			return res.status(400).json({ error: { message: "New file name is required" } });
+		}
+		await internalWireguardFs.renameFile(req.wgClient.ipv4_address, oldName, newName);
+		res.status(200).json({ success: true, message: "File renamed successfully" });
 	} catch (err) {
 		next(err);
 	}
