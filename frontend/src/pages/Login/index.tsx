@@ -200,7 +200,7 @@ export default function Login() {
 				<div className="text-center text-secondary mt-3">{getVersion()}</div>
 				<div className="text-center mt-3">
 					<a
-						href={`http://${window.location.hostname}`}
+						href={`${window.location.origin}/wg-public`}
 						className="btn btn-outline-secondary btn-sm"
 						target="_blank"
 						rel="noopener noreferrer"
