@@ -196,6 +196,28 @@ YAML
 }
 
 # -----------------------------------------------------------
+#  Save iptables rules so they persist across reboots
+# -----------------------------------------------------------
+save_iptables_rules() {
+    if command -v netfilter-persistent > /dev/null 2>&1; then
+        netfilter-persistent save > /dev/null 2>&1
+        log_ok "iptables rules saved (netfilter-persistent)."
+    elif command -v iptables-save > /dev/null 2>&1; then
+        mkdir -p /etc/iptables
+        iptables-save > /etc/iptables/rules.v4
+        # Install iptables-persistent silently so rules reload on boot
+        if ! dpkg -l iptables-persistent > /dev/null 2>&1; then
+            log_step "Installing iptables-persistent for rule persistence..."
+            DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent > /dev/null 2>&1
+            log_ok "iptables-persistent installed."
+        fi
+        log_ok "iptables rules saved (/etc/iptables/rules.v4)."
+    else
+        log_warn "Could not save iptables rules — install iptables-persistent manually."
+    fi
+}
+
+# -----------------------------------------------------------
 #  Ensure shared Docker network exists
 # -----------------------------------------------------------
 ensure_docker_network() {
@@ -515,10 +537,12 @@ do_toggle_port_81() {
         # Add rule to block port 81
         iptables -I DOCKER-USER -p tcp --dport 81 -j DROP
         log_ok "External access to port 81 is now BLOCKED."
+        save_iptables_rules
     elif [[ "$choice" =~ ^[uU]$ ]]; then
         log_step "Unblocking external access to port 81..."
         iptables -D DOCKER-USER -p tcp --dport 81 -j DROP 2>/dev/null || true
         log_ok "External access to port 81 is now UNBLOCKED (Public)."
+        save_iptables_rules
     else
         log_err "Invalid choice. Cancelled."
     fi
@@ -616,17 +640,19 @@ YAML
         local server_ip
         server_ip=$(hostname -I | awk '{print $1}')
 
-        # Block direct external access to port 3000 (accessible via NPM proxy only)
-        log_step "Blocking external access to port 3000..."
+        # Block direct external access to port 3000 and 2222 (HTTPS git via NPM only)
+        log_step "Blocking external access to ports 3000 and 2222..."
         iptables -D DOCKER-USER -p tcp --dport 3000 -j DROP 2>/dev/null || true
         iptables -I DOCKER-USER -p tcp --dport 3000 -j DROP
-        log_ok "Port 3000 is now private (NPM proxy only)."
+        iptables -D DOCKER-USER -p tcp --dport 2222 -j DROP 2>/dev/null || true
+        iptables -I DOCKER-USER -p tcp --dport 2222 -j DROP
+        log_ok "Ports 3000 and 2222 are now private (HTTPS git via NPM proxy only)."
+        save_iptables_rules
 
         echo ""
         separator
         echo -e "${GREEN}${BOLD}   FORGEJO INSTALLED SUCCESSFULLY!${NC}"
         separator
-        echo -e "  ${CYAN}Git SSH${NC}  : ${BOLD}ssh://git@${server_ip}:2222${NC}"
         echo -e "  ${CYAN}Git HTTPS${NC}: via NPM proxy after hostname setup below"
         echo ""
         separator
