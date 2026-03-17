@@ -12,6 +12,12 @@ COMPOSE_FILE="${INSTALL_DIR}/docker-compose.yml"
 CONTAINER_NAME="d3v-npmwg"
 IMAGE_NAME="ghcr.io/xtcnet/d3v-npmwg:latest"
 
+FORGEJO_INSTALL_DIR="/opt/forgejo"
+FORGEJO_COMPOSE_FILE="${FORGEJO_INSTALL_DIR}/docker-compose.yml"
+FORGEJO_CONTAINER_NAME="forgejo"
+FORGEJO_IMAGE="codeberg.org/forgejo/forgejo:latest"
+DOCKER_NETWORK="d3v-net"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -172,8 +178,28 @@ $(echo -e "$custom_ports_block" | sed '/^$/d')    volumes:
       - ./wireguard:/etc/wireguard
     environment:
       WG_HOST: "${host}"
+    networks:
+      - d3v-net
+
+networks:
+  d3v-net:
+    external: true
+    name: ${DOCKER_NETWORK}
 YAML
     log_ok "docker-compose.yml created/updated."
+}
+
+# -----------------------------------------------------------
+#  Ensure shared Docker network exists
+# -----------------------------------------------------------
+ensure_docker_network() {
+    if ! docker network ls --format '{{.Name}}' | grep -q "^${DOCKER_NETWORK}$"; then
+        log_step "Creating shared Docker network '${DOCKER_NETWORK}'..."
+        docker network create "${DOCKER_NETWORK}" > /dev/null
+        log_ok "Network '${DOCKER_NETWORK}' created."
+    else
+        log_ok "Network '${DOCKER_NETWORK}' already exists."
+    fi
 }
 
 # -----------------------------------------------------------
@@ -221,6 +247,9 @@ do_install() {
     log_step "Creating ${INSTALL_DIR}..."
     mkdir -p "$INSTALL_DIR"
     log_ok "Directory created."
+
+    # --- Ensure shared network ---
+    ensure_docker_network
 
     # --- Write docker-compose.yml ---
     generate_docker_compose "$wg_host"
@@ -490,6 +519,205 @@ do_toggle_port_81() {
 }
 
 # -----------------------------------------------------------
+#  Forgejo — Install / Uninstall / Update
+# -----------------------------------------------------------
+do_forgejo_install() {
+    require_root
+
+    if [ -d "$FORGEJO_INSTALL_DIR" ]; then
+        log_warn "Forgejo is already installed at ${FORGEJO_INSTALL_DIR}."
+        log_warn "Use the Update option to pull the latest image."
+        return
+    fi
+
+    separator
+    echo -e "${BOLD} Forgejo Installation${NC}"
+    separator
+    echo ""
+
+    install_deps
+    echo ""
+
+    ensure_docker_network
+
+    # Ensure D3V-NPMWG is on d3v-net (runtime + persistent in compose)
+    if [ -f "$COMPOSE_FILE" ]; then
+        if ! grep -q "d3v-net" "$COMPOSE_FILE"; then
+            log_step "Updating D3V-NPMWG compose to join '${DOCKER_NETWORK}'..."
+            local current_wg_host=""
+            current_wg_host=$(grep -E 'WG_HOST:' "$COMPOSE_FILE" | awk -F'"' '{print $2}')
+            [ -z "$current_wg_host" ] && current_wg_host=$(detect_public_ip)
+            cd "$INSTALL_DIR"
+            generate_docker_compose "$current_wg_host"
+            $(get_compose_cmd) up -d --no-recreate 2>/dev/null || true
+            log_ok "D3V-NPMWG compose updated."
+        fi
+        # Connect running container immediately (no restart needed)
+        if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+            docker network connect "${DOCKER_NETWORK}" "${CONTAINER_NAME}" 2>/dev/null || true
+        fi
+    fi
+
+    log_step "Creating ${FORGEJO_INSTALL_DIR}..."
+    mkdir -p "${FORGEJO_INSTALL_DIR}"
+    log_ok "Directory created."
+
+    log_step "Generating Forgejo docker-compose.yml..."
+    cat > "$FORGEJO_COMPOSE_FILE" <<YAML
+services:
+  forgejo:
+    image: ${FORGEJO_IMAGE}
+    container_name: ${FORGEJO_CONTAINER_NAME}
+    restart: unless-stopped
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - FORGEJO__database__DB_TYPE=sqlite3
+      - FORGEJO__server__SSH_PORT=2222
+      - FORGEJO__server__SSH_LISTEN_PORT=22
+      - FORGEJO__server__HTTP_PORT=3000
+    volumes:
+      - ./data:/data
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    networks:
+      - d3v-net
+
+networks:
+  d3v-net:
+    external: true
+    name: ${DOCKER_NETWORK}
+YAML
+    log_ok "docker-compose.yml created."
+
+    local dc
+    dc=$(get_compose_cmd)
+    cd "$FORGEJO_INSTALL_DIR"
+
+    log_step "Pulling Forgejo image (this may take a few minutes)..."
+    $dc pull
+    log_ok "Image pulled."
+
+    log_step "Starting Forgejo..."
+    $dc up -d
+    log_ok "Forgejo started."
+
+    log_step "Waiting for Forgejo to be ready (10s)..."
+    sleep 10
+
+    if docker ps --format '{{.Names}}' | grep -q "^${FORGEJO_CONTAINER_NAME}$"; then
+        local server_ip
+        server_ip=$(hostname -I | awk '{print $1}')
+        echo ""
+        separator
+        echo -e "${GREEN}${BOLD}   FORGEJO INSTALLED SUCCESSFULLY!${NC}"
+        separator
+        echo -e "  ${CYAN}Forgejo Web UI${NC} : ${BOLD}http://${server_ip}:3000${NC}"
+        echo -e "  ${CYAN}Git SSH${NC}        : ${BOLD}ssh://git@${server_ip}:2222${NC}"
+        echo ""
+        separator
+        echo -e "${BOLD}  Thêm hostname trong Nginx Proxy Manager${NC}"
+        separator
+        echo -e "  ${YELLOW}Bước 1:${NC} Mở Admin UI tại ${BOLD}http://${server_ip}:81${NC}"
+        echo ""
+        echo -e "  ${YELLOW}Bước 2:${NC} Vào ${BOLD}Proxy Hosts${NC} → nhấn ${BOLD}Add Proxy Host${NC}"
+        echo ""
+        echo -e "  ${YELLOW}Bước 3:${NC} Tab ${BOLD}Details${NC} — điền thông tin:"
+        echo -e "    Domain Names      : ${CYAN}git.yourdomain.com${NC}"
+        echo -e "    Scheme            : ${CYAN}http${NC}"
+        echo -e "    Forward Hostname  : ${CYAN}forgejo${NC}   ← tên container"
+        echo -e "    Forward Port      : ${CYAN}3000${NC}"
+        echo -e "    ☑ Cache Assets    ☑ Block Common Exploits"
+        echo ""
+        echo -e "  ${YELLOW}Bước 4:${NC} Tab ${BOLD}SSL${NC} → chọn ${BOLD}Request a new SSL Certificate${NC}"
+        echo -e "    ☑ Force SSL   ☑ HTTP/2 Support"
+        echo ""
+        echo -e "  ${YELLOW}Bước 5:${NC} Nhấn ${BOLD}Save${NC}."
+        echo ""
+        echo -e "  ${YELLOW}Bước 6:${NC} Mở ${BOLD}http://${server_ip}:3000${NC} → hoàn tất Forgejo setup"
+        echo -e "    Server Domain     : ${CYAN}git.yourdomain.com${NC}"
+        echo -e "    Base URL (ROOT_URL): ${CYAN}https://git.yourdomain.com${NC}"
+        separator
+    else
+        log_err "Forgejo did not start. Check: docker logs ${FORGEJO_CONTAINER_NAME}"
+    fi
+}
+
+do_forgejo_uninstall() {
+    require_root
+
+    if [ ! -d "$FORGEJO_INSTALL_DIR" ]; then
+        log_warn "Forgejo is not installed at ${FORGEJO_INSTALL_DIR}."
+        return
+    fi
+
+    log_warn "This will stop and remove Forgejo and ALL its data (repos, users, issues)."
+    read -rp "$(echo -e "${RED}Are you sure? (y/N): ${NC}")" confirm
+    if [[ ! "$confirm" =~ ^[yY]$ ]]; then
+        echo "Cancelled."
+        return
+    fi
+
+    local dc
+    dc=$(get_compose_cmd)
+    cd "$FORGEJO_INSTALL_DIR" && $dc down -v 2>/dev/null || true
+    cd /
+
+    log_step "Removing ${FORGEJO_INSTALL_DIR}..."
+    rm -rf "$FORGEJO_INSTALL_DIR"
+    log_ok "Forgejo uninstalled."
+}
+
+do_forgejo_update() {
+    require_root
+
+    if [ ! -d "$FORGEJO_INSTALL_DIR" ]; then
+        log_err "Forgejo is not installed. Install it first."
+        return
+    fi
+
+    local dc
+    dc=$(get_compose_cmd)
+    cd "$FORGEJO_INSTALL_DIR" || return
+
+    log_step "Pulling latest Forgejo image..."
+    $dc pull
+    log_ok "Image pulled."
+
+    log_step "Recreating Forgejo container..."
+    $dc up -d
+    log_ok "Forgejo updated."
+
+    log_step "Cleaning old images..."
+    docker image prune -f > /dev/null 2>&1
+    log_ok "Done."
+}
+
+show_forgejo_menu() {
+    while true; do
+        echo ""
+        separator
+        echo -e "${BOLD}  Forgejo Manager${NC}"
+        separator
+        echo "  1) Install Forgejo"
+        echo "  2) Uninstall Forgejo"
+        echo "  3) Update Forgejo"
+        echo "  4) Back"
+        separator
+        read -rp "  Select [1-4]: " choice
+        echo ""
+        case "$choice" in
+            1) do_forgejo_install ;;
+            2) do_forgejo_uninstall ;;
+            3) do_forgejo_update ;;
+            4) return ;;
+            *) log_err "Invalid option." ;;
+        esac
+    done
+}
+
+# -----------------------------------------------------------
 #  Interactive menu
 # -----------------------------------------------------------
 show_menu() {
@@ -505,9 +733,10 @@ show_menu() {
         echo "  5) Update D3V-NPMWG"
         echo "  6) Manage Custom Stream Ports"
         echo "  7) Toggle Admin Port 81 (Block/Unblock)"
-        echo "  8) Exit"
+        echo "  8) Forgejo"
+        echo "  9) Exit"
         separator
-        read -rp "  Select [1-8]: " choice
+        read -rp "  Select [1-9]: " choice
         echo ""
         case "$choice" in
             1) do_install ;;
@@ -517,7 +746,8 @@ show_menu() {
             5) do_update ;;
             6) do_manage_ports ;;
             7) do_toggle_port_81 ;;
-            8) echo "Bye!"; exit 0 ;;
+            8) show_forgejo_menu ;;
+            9) echo "Bye!"; exit 0 ;;
             *) log_err "Invalid option." ;;
         esac
     done
@@ -534,6 +764,7 @@ show_help() {
     echo "  update       Pull latest image and restart"
     echo "  manage-ports Add or remove custom exposed Stream TCP/UDP ports"
     echo "  toggle-port  Block or unblock external access to Admin UI (Port 81) using iptables"
+    echo "  forgejo      Open Forgejo submenu (install/uninstall/update)"
     echo "  help         Show this help"
     echo ""
     echo "Run without arguments to open the interactive menu."
@@ -553,6 +784,7 @@ else
         update)      do_update ;;
         manage-ports) do_manage_ports ;;
         toggle-port) do_toggle_port_81 ;;
+        forgejo) show_forgejo_menu ;;
         help|-h|--help) show_help ;;
         *)
             log_err "Unknown command: $1"
