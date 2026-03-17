@@ -15,7 +15,7 @@ IMAGE_NAME="ghcr.io/xtcnet/d3v-npmwg:latest"
 FORGEJO_INSTALL_DIR="/opt/forgejo"
 FORGEJO_COMPOSE_FILE="${FORGEJO_INSTALL_DIR}/docker-compose.yml"
 FORGEJO_CONTAINER_NAME="forgejo"
-FORGEJO_IMAGE="codeberg.org/forgejo/forgejo:latest"
+FORGEJO_IMAGE="codeberg.org/forgejo/forgejo:9"
 DOCKER_NETWORK="d3v-net"
 
 RED='\033[0;31m'
